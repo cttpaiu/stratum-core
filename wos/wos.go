@@ -557,9 +557,17 @@ func ImportWoSExcel(excelPath string, dbPath string) error {
 	return importRecords(dbPath, records, cc)
 }
 
+// ReadWoSRecords reads Web of Science records from a CSV or Excel file.
+func ReadWoSRecords(filePath string) ([]map[string]string, error) {
+	if strings.HasSuffix(strings.ToLower(filePath), ".xlsx") {
+		return readWoSExcel(filePath)
+	}
+	return readWoSCSV(filePath)
+}
+
 // CompareDOIs queries the DuckDB database to check which DOIs (and fuzzy matched titles) from the WoS file overlap.
 func CompareDOIs(wosCSVPath string, dbPath string) (*ComparisonReport, error) {
-	wosRows, err := readWoSCSV(wosCSVPath)
+	wosRows, err := ReadWoSRecords(wosCSVPath)
 	if err != nil {
 		return nil, err
 	}

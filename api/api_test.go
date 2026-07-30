@@ -107,7 +107,7 @@ func TestStatusRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -132,7 +132,7 @@ func TestStatsRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -182,7 +182,7 @@ func TestQueryRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -239,7 +239,7 @@ func TestConfigRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -297,7 +297,7 @@ func TestSPAFallback(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -322,7 +322,7 @@ func TestPipelineRoutes(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -398,7 +398,7 @@ func TestProjectsAndHistory(t *testing.T) {
 	defer cleanup()
 	defer os.RemoveAll("projects")
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -472,7 +472,7 @@ func TestOpenAlexTopicsRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -536,7 +536,7 @@ func TestOpenAlexCountRouteWithInvalidTopics(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -578,7 +578,7 @@ func TestOpenAlexTopicsRouteWithInvalidTopics(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -623,7 +623,7 @@ func TestOpenAlexCountRouteWithInvalidQuery(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -650,7 +650,7 @@ func TestOpenAlexTopicsRouteWithInvalidQuery(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -677,7 +677,7 @@ func TestPipelineRouteWithInvalidQuery(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -712,7 +712,7 @@ func TestOpenAlexSampleRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -818,7 +818,7 @@ func TestMCPRoute(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 	err := server.RegisterRoutes()
 	if err != nil {
 		t.Fatalf("RegisterRoutes failed: %v", err)
@@ -851,7 +851,7 @@ func TestMCPResources(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 
 	// Test Knowledge Resource Handler
 	hKnowledge := server.handleReadKnowledgeResource()
@@ -877,7 +877,7 @@ func TestNewMCPTools(t *testing.T) {
 	dbPath, cleanup := setupTestEnv(t)
 	defer cleanup()
 
-	server := NewAPIServer("localhost:8080", dbPath)
+	server := NewAPIServer("localhost:8080", dbPath, "")
 
 	ctx := context.Background()
 

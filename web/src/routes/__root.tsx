@@ -24,6 +24,7 @@ export function Root() {
     return 'default'
   })
   const [projects, setProjects] = useState<string[]>(['default'])
+  const [workspaceDir, setWorkspaceDir] = useState('')
 
   // Modal State Hooks
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -43,9 +44,21 @@ export function Root() {
     }
   }
 
+  const fetchWorkspace = async () => {
+    try {
+      const response = await fetch('/api/workspace')
+      if (response.ok) {
+        const data = await response.json()
+        setWorkspaceDir(data.workspace_dir || '')
+      }
+    } catch (err) {
+      console.error('Failed to load workspace:', err)
+    }
+  }
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProjects()
+    fetchWorkspace()
   }, [])
 
   useEffect(() => {
@@ -92,6 +105,8 @@ export function Root() {
     }
   }
 
+
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark')
@@ -116,6 +131,16 @@ export function Root() {
               <span className="text-[10px] font-mono text-zinc-500 font-semibold uppercase tracking-wider">
                 v0.1
               </span>
+            </div>
+          </div>
+
+          {/* Workspace Area */}
+          <div className="flex flex-col gap-1.5 p-4 border-b border-zinc-200 dark:border-zinc-850 bg-zinc-100/30 dark:bg-zinc-900/10">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+              Workspace Folder
+            </span>
+            <div className="text-[10px] font-mono truncate text-zinc-600 dark:text-zinc-400" title={workspaceDir || 'Default'}>
+              {workspaceDir || './'}
             </div>
           </div>
 

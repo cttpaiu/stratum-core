@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +28,7 @@ import (
 
 // MCP Types mapped from standalone server
 type ValidateArgs struct {
-	ConfigPath string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
+	Project string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
 }
 
 type ValidateResult struct {
@@ -36,7 +37,7 @@ type ValidateResult struct {
 }
 
 type SearchArgs struct {
-	ConfigPath   string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
+	Project      string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
 	CheckAnchors bool   `json:"check_anchors,omitempty" jsonschema:"Optional flag to check anchor DOI coverage"`
 }
 
@@ -49,7 +50,7 @@ type SearchResult struct {
 }
 
 type DownloadArgs struct {
-	ConfigPath  string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
+	Project     string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
 	OutputJSONL string `json:"output_jsonl,omitempty" jsonschema:"Optional path to write downloaded JSONL"`
 }
 
@@ -59,8 +60,8 @@ type DownloadResult struct {
 }
 
 type ConvertDBArgs struct {
-	ConfigPath string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
-	JSONLPath  string `json:"jsonl_path,omitempty" jsonschema:"Optional path to input JSONL"`
+	Project   string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
+	JSONLPath string `json:"jsonl_path,omitempty" jsonschema:"Optional path to input JSONL"`
 }
 
 type ConvertDBResult struct {
@@ -72,9 +73,9 @@ type ConvertDBResult struct {
 }
 
 type ImputeArgs struct {
-	ConfigPath string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
-	Pipeline   string `json:"pipeline,omitempty" jsonschema:"Pipeline stage to execute: crossref, llm, pdf, or all"`
-	Limit      int    `json:"limit,omitempty" jsonschema:"Limit for PDF extraction"`
+	Project  string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
+	Pipeline string `json:"pipeline,omitempty" jsonschema:"Pipeline stage to execute: crossref, llm, pdf, or all"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"Limit for PDF extraction"`
 }
 
 type ImputeResult struct {
@@ -83,12 +84,19 @@ type ImputeResult struct {
 }
 
 type GetTopicsArgs struct {
-	ConfigPath string `json:"config_path,omitempty" jsonschema:"Optional path to the config file or config.db"`
-	Details    bool   `json:"details,omitempty"`
+	Project string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
+	Details bool   `json:"details,omitempty"`
 }
 
 type GetTopicsResult struct {
-	Markdown string `json:"markdown"`
+	CSVPath string `json:"csv_path"`
+	Message string `json:"message"`
+}
+
+type GetWorkspaceArgs struct{}
+
+type GetWorkspaceResult struct {
+	WorkspaceDir string `json:"workspace_dir"`
 }
 
 // Project Management structures
@@ -197,13 +205,14 @@ type ValidateAnchorsResult struct {
 
 // Search & sample structures
 type GetSampleArgs struct {
-	Size    int    `json:"size,omitempty" jsonschema:"Number of records to fetch. Default 20, max 200"`
+	Size    int    `json:"size,omitempty" jsonschema:"Number of records to fetch. Default 20, max 385"`
 	Project string `json:"project,omitempty" jsonschema:"Optional project name"`
 }
 
 type GetSampleResult struct {
-	TotalMatches int             `json:"total_matches"`
-	Samples      []openalex.Work `json:"samples"`
+	TotalMatches int    `json:"total_matches"`
+	CSVPath      string `json:"csv_path"`
+	Message      string `json:"message"`
 }
 
 // Exploration structures
@@ -233,38 +242,19 @@ type GetStatisticsResult struct {
 }
 
 // WoS Integration structures
-type UploadWoSArgs struct {
-	FilePath string `json:"file_path" jsonschema:"Absolute path of WoS file in local workspace"`
-	Project  string `json:"project,omitempty" jsonschema:"Optional project name"`
+type SyncWoSArgs struct {
+	FilePath string `json:"file_path" jsonschema:"Absolute path of Web of Science CSV or Excel file in local workspace"`
+	Project  string `json:"project,omitempty" jsonschema:"Optional project name. Defaults to active project"`
 }
 
-type UploadWoSResult struct {
-	Status   string `json:"status"`
-	Filename string `json:"filename"`
-	Size     int64  `json:"size_bytes"`
-}
-
-type ImportWoSDoisArgs struct {
-	Filename string `json:"filename" jsonschema:"Filename of WoS upload inside project uploads folder"`
-	Project  string `json:"project,omitempty" jsonschema:"Optional project name"`
-}
-
-type ImportWoSDoisResult struct {
-	Status          string `json:"status"`
-	ImportedRecords int    `json:"imported_records"`
-}
-
-type SyncWoSOpenAlexArgs struct {
-	Filename string `json:"filename" jsonschema:"Filename of WoS upload inside project uploads folder"`
-	Project  string `json:"project,omitempty" jsonschema:"Optional project name"`
-}
-
-type SyncWoSOpenAlexResult struct {
-	TotalWoS          int     `json:"total_wos"`
-	TotalDB           int     `json:"total_db"`
-	ExactDOIMatches   int     `json:"exact_doi_matches"`
-	FuzzyTitleMatches int     `json:"fuzzy_title_matches"`
-	OverlapPercentage float64 `json:"overlap_percentage"`
+type SyncWoSResult struct {
+	TotalWoS          int      `json:"total_wos"`
+	TotalDB           int      `json:"total_db"`
+	ExactDOIMatches   int      `json:"exact_doi_matches"`
+	FuzzyTitleMatches int      `json:"fuzzy_title_matches"`
+	OverlapPercentage float64  `json:"overlap_percentage"`
+	NewPapersFetched  int      `json:"new_papers_fetched"`
+	Errors            []string `json:"errors,omitempty"`
 }
 
 func (s *APIServer) resolveProjectFromConfigPath(configPath string) string {
@@ -368,25 +358,23 @@ func (s *APIServer) RegisterMCPTools() error {
 	}, s.handleGetStatisticsMCP)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "upload_wos_file",
-		Description: "Upload a Web of Science export file (CSV, Excel, or Plain Text) to the project uploads directory.",
-	}, s.handleUploadWoSMCP)
+		Name:        "sync_wos",
+		Description: "Ingest a Web of Science CSV or Excel export file, download missing papers from OpenAlex, and calculate overlap metrics.",
+	}, s.handleSyncWoSMCP)
 
 	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "import_wos_dois",
-		Description: "Parse the uploaded Web of Science file and import its DOIs/records into the project database.",
-	}, s.handleImportWoSDoisMCP)
-
-	mcp.AddTool(s.mcpServer, &mcp.Tool{
-		Name:        "sync_wos_openalex",
-		Description: "Compare DOIs in the imported WoS files against the OpenAlex database to evaluate paper overlap and coverage.",
-	}, s.handleSyncWoSOpenAlexMCP)
+		Name:        "get_workspace",
+		Description: "Get the path to the current local workspace root directory.",
+	}, s.handleGetWorkspaceMCP)
 
 	return nil
 }
 
 func (s *APIServer) handleValidate(ctx context.Context, req *mcp.CallToolRequest, args ValidateArgs) (*mcp.CallToolResult, ValidateResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	configDBPath, _, _, _, _ := s.getProjectPaths(project)
 
 	cfg, err := config.LoadConfig(configDBPath)
@@ -443,7 +431,10 @@ func (s *APIServer) handleValidate(ctx context.Context, req *mcp.CallToolRequest
 }
 
 func (s *APIServer) handleSearch(ctx context.Context, req *mcp.CallToolRequest, args SearchArgs) (*mcp.CallToolResult, SearchResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	configDBPath, _, _, _, _ := s.getProjectPaths(project)
 
 	cfg, err := config.LoadConfig(configDBPath)
@@ -567,7 +558,10 @@ func (s *APIServer) handleSearch(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 func (s *APIServer) handleDownload(ctx context.Context, req *mcp.CallToolRequest, args DownloadArgs) (*mcp.CallToolResult, DownloadResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	configDBPath, _, jsonlDir, _, _ := s.getProjectPaths(project)
 
 	cfg, err := config.LoadConfig(configDBPath)
@@ -650,7 +644,10 @@ func (s *APIServer) handleDownload(ctx context.Context, req *mcp.CallToolRequest
 }
 
 func (s *APIServer) handleConvertDB(ctx context.Context, req *mcp.CallToolRequest, args ConvertDBArgs) (*mcp.CallToolResult, ConvertDBResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	_, papersDBPath, jsonlDir, _, _ := s.getProjectPaths(project)
 
 	jsonlPath := args.JSONLPath
@@ -741,7 +738,10 @@ func (s *APIServer) handleConvertDB(ctx context.Context, req *mcp.CallToolReques
 }
 
 func (s *APIServer) handleImpute(ctx context.Context, req *mcp.CallToolRequest, args ImputeArgs) (*mcp.CallToolResult, ImputeResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	configDBPath, papersDBPath, _, _, _ := s.getProjectPaths(project)
 
 	cfg, err := config.LoadConfig(configDBPath)
@@ -843,7 +843,10 @@ func (s *APIServer) handleImpute(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolRequest, args GetTopicsArgs) (*mcp.CallToolResult, GetTopicsResult, error) {
-	project := s.resolveProjectFromConfigPath(args.ConfigPath)
+	project := args.Project
+	if project == "" {
+		project = s.currentProject
+	}
 	configDBPath, _, _, _, _ := s.getProjectPaths(project)
 
 	cfg, err := config.LoadConfig(configDBPath)
@@ -852,7 +855,7 @@ func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolReques
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: errStr}},
 			IsError: true,
-		}, GetTopicsResult{Markdown: ""}, nil
+		}, GetTopicsResult{Message: errStr}, nil
 	}
 
 	keywords := cfg.Keywords
@@ -861,7 +864,7 @@ func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolReques
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: errStr}},
 			IsError: true,
-		}, GetTopicsResult{Markdown: ""}, nil
+		}, GetTopicsResult{Message: errStr}, nil
 	}
 	topics := cfg.Topics
 
@@ -895,7 +898,7 @@ func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolReques
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: errStr}},
 				IsError: true,
-			}, GetTopicsResult{Markdown: ""}, nil
+			}, GetTopicsResult{Message: errStr}, nil
 		}
 		if resp == nil || len(resp.GroupBy) == 0 {
 			break
@@ -910,7 +913,7 @@ func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolReques
 	if len(allGroups) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "No topics found matching the current keyword configurations."}},
-		}, GetTopicsResult{Markdown: "No topics found."}, nil
+		}, GetTopicsResult{Message: "No topics found matching configuration."}, nil
 	}
 
 	sort.Slice(allGroups, func(i, j int) bool {
@@ -970,27 +973,43 @@ func (s *APIServer) handleGetTopics(ctx context.Context, req *mcp.CallToolReques
 	}
 	wg.Wait()
 
-	var md strings.Builder
-	md.WriteString(fmt.Sprintf("## Topics found in search results (%d topics, %d papers total)\n\n", len(enriched), totalPapers))
-	md.WriteString("| Topic ID | Topic Name | Description | Paper Count | Percentage |\n")
-	md.WriteString("| :--- | :--- | :--- | :---: | :---: |\n")
+	// Write enriched topics to CSV
+	_, _, _, dbDir, _ := s.getProjectPaths(project)
+	csvFilename := fmt.Sprintf("%s_topics.csv", project)
+	csvPath := filepath.Join(dbDir, csvFilename)
 
-	for _, t := range enriched {
-		desc := t.Description
-		if len(desc) > 80 {
-			desc = desc[:77] + "..."
-		}
-		if desc == "" {
-			desc = "—"
-		}
-		md.WriteString(fmt.Sprintf("| `%s` | %s | %s | %d | %.2f%% |\n", t.TopicID, t.DisplayName, desc, t.Count, t.Percentage))
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, GetTopicsResult{}, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	markdownStr := md.String()
+	csvFile, err := os.Create(csvPath)
+	if err != nil {
+		return nil, GetTopicsResult{}, fmt.Errorf("failed to create topics CSV file: %w", err)
+	}
+	defer csvFile.Close()
+
+	writer := csv.NewWriter(csvFile)
+	defer writer.Flush()
+
+	writer.Write([]string{"topic_id", "topic_name", "description", "paper_count", "percentage"})
+	for _, t := range enriched {
+		writer.Write([]string{
+			t.TopicID,
+			t.DisplayName,
+			t.Description,
+			fmt.Sprintf("%d", t.Count),
+			fmt.Sprintf("%.2f%%", t.Percentage),
+		})
+	}
+
+	msg := fmt.Sprintf("Topics successfully saved to CSV: %s (%d topics found, %d papers total)", csvPath, len(enriched), totalPapers)
 
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: markdownStr}},
-	}, GetTopicsResult{Markdown: markdownStr}, nil
+		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
+	}, GetTopicsResult{
+		CSVPath: csvPath,
+		Message: msg,
+	}, nil
 }
 
 // RegisterMCPResources registers all static and dynamic resources.
@@ -1334,6 +1353,10 @@ func (s *APIServer) handleReadStateHistory() mcp.ResourceHandler {
 	}
 }
 
+func (s *APIServer) handleGetWorkspaceMCP(ctx context.Context, req *mcp.CallToolRequest, args GetWorkspaceArgs) (*mcp.CallToolResult, GetWorkspaceResult, error) {
+	return &mcp.CallToolResult{}, GetWorkspaceResult{WorkspaceDir: s.workspaceDir}, nil
+}
+
 // Project Management handlers
 func (s *APIServer) handleCreateProjectMCP(ctx context.Context, req *mcp.CallToolRequest, args CreateProjectArgs) (*mcp.CallToolResult, CreateProjectResult, error) {
 	name := sanitizeProjectName(args.Name)
@@ -1369,7 +1392,12 @@ func (s *APIServer) handleCreateProjectMCP(ctx context.Context, req *mcp.CallToo
 func (s *APIServer) handleListProjectsMCP(ctx context.Context, req *mcp.CallToolRequest, args ListProjectsArgs) (*mcp.CallToolResult, ListProjectsResult, error) {
 	projects := []string{"default"}
 
-	if entries, err := os.ReadDir("projects"); err == nil {
+	baseDir := s.workspaceDir
+	if baseDir == "" {
+		baseDir = "."
+	}
+	projectsDir := filepath.Join(baseDir, "projects")
+	if entries, err := os.ReadDir(projectsDir); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				name := entry.Name()
@@ -1723,7 +1751,7 @@ func (s *APIServer) handleGetSampleMCP(ctx context.Context, req *mcp.CallToolReq
 		project = s.currentProject
 	}
 
-	configDBPath, _, _, _, _ := s.getProjectPaths(project)
+	configDBPath, _, _, dbDir, _ := s.getProjectPaths(project)
 	cfg, err := config.LoadConfig(configDBPath)
 	if err != nil {
 		return nil, GetSampleResult{}, fmt.Errorf("failed to load config: %w", err)
@@ -1733,8 +1761,8 @@ func (s *APIServer) handleGetSampleMCP(ctx context.Context, req *mcp.CallToolReq
 	if size <= 0 {
 		size = 20
 	}
-	if size > 200 {
-		size = 200
+	if size > 385 {
+		size = 385
 	}
 
 	client := openalex.NewClient(cfg.API.Keys, cfg.API.Email, 200, 5, 3, 1)
@@ -1760,9 +1788,51 @@ func (s *APIServer) handleGetSampleMCP(ctx context.Context, req *mcp.CallToolReq
 		return nil, GetSampleResult{}, fmt.Errorf("failed to fetch sample from OpenAlex: %w", err)
 	}
 
-	return &mcp.CallToolResult{}, GetSampleResult{
+	csvFilename := fmt.Sprintf("%s_sample.csv", project)
+	csvPath := filepath.Join(dbDir, csvFilename)
+
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return nil, GetSampleResult{}, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	csvFile, err := os.Create(csvPath)
+	if err != nil {
+		return nil, GetSampleResult{}, fmt.Errorf("failed to create CSV file: %w", err)
+	}
+	defer csvFile.Close()
+
+	writer := csv.NewWriter(csvFile)
+	defer writer.Flush()
+
+	writer.Write([]string{"id", "doi", "title", "publication_year", "type", "source_venue", "fwci", "cited_by_count", "primary_topic"})
+	for _, w := range samples {
+		var venueName string
+		if w.PrimaryLocation.Source.DisplayName != "" {
+			venueName = w.PrimaryLocation.Source.DisplayName
+		} else {
+			venueName = "—"
+		}
+		writer.Write([]string{
+			w.ID,
+			w.DOI,
+			w.Title,
+			fmt.Sprintf("%d", w.PublicationYear),
+			w.Type,
+			venueName,
+			fmt.Sprintf("%.4f", w.FWCI),
+			fmt.Sprintf("%d", w.CitedByCount),
+			w.PrimaryTopic.DisplayName,
+		})
+	}
+
+	msg := fmt.Sprintf("Sample of %d papers successfully saved to CSV: %s", len(samples), csvPath)
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: msg}},
+	}, GetSampleResult{
 		TotalMatches: count,
-		Samples:      samples,
+		CSVPath:      csvPath,
+		Message:      msg,
 	}, nil
 }
 
@@ -1893,125 +1963,136 @@ func (s *APIServer) handleGetStatisticsMCP(ctx context.Context, req *mcp.CallToo
 }
 
 // WoS Integration handlers
-func (s *APIServer) handleUploadWoSMCP(ctx context.Context, req *mcp.CallToolRequest, args UploadWoSArgs) (*mcp.CallToolResult, UploadWoSResult, error) {
+func (s *APIServer) handleSyncWoSMCP(ctx context.Context, req *mcp.CallToolRequest, args SyncWoSArgs) (*mcp.CallToolResult, SyncWoSResult, error) {
 	project := args.Project
 	if project == "" {
 		project = s.currentProject
 	}
+
+	configDBPath, _, jsonlDir, dbDir, _ := s.getProjectPaths(project)
+	s.ensureProjectDirs(project)
 
 	if args.FilePath == "" {
-		return nil, UploadWoSResult{}, fmt.Errorf("file_path is required")
+		return nil, SyncWoSResult{}, fmt.Errorf("file_path is required")
 	}
 
-	ext := strings.ToLower(filepath.Ext(args.FilePath))
-	if ext != ".csv" && ext != ".xlsx" && ext != ".xls" && ext != ".txt" {
-		return nil, UploadWoSResult{}, fmt.Errorf("unsupported WoS format %q. Please upload a .csv, .xlsx, .xls, or .txt file", ext)
+	// 1. Verify file exists
+	if _, err := os.Stat(args.FilePath); err != nil {
+		return nil, SyncWoSResult{}, fmt.Errorf("file %q not found: %w", args.FilePath, err)
 	}
 
-	_, _, _, _, uploadDir := s.getProjectPaths(project)
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		return nil, UploadWoSResult{}, fmt.Errorf("failed to create uploads directory: %w", err)
-	}
-
-	srcFile, err := os.Open(args.FilePath)
+	// 2. Parse DOIs from WoS file
+	records, err := wos.ReadWoSRecords(args.FilePath)
 	if err != nil {
-		return nil, UploadWoSResult{}, fmt.Errorf("failed to open source WoS file: %w", err)
-	}
-	defer srcFile.Close()
-
-	safeName := fmt.Sprintf("wos_%d%s", time.Now().UnixNano(), ext)
-	destPath := filepath.Join(uploadDir, safeName)
-	dst, err := os.Create(destPath)
-	if err != nil {
-		return nil, UploadWoSResult{}, fmt.Errorf("failed to create destination file in uploads: %w", err)
-	}
-	defer dst.Close()
-
-	written, err := io.Copy(dst, srcFile)
-	if err != nil {
-		return nil, UploadWoSResult{}, fmt.Errorf("failed to write WoS file: %w", err)
+		return nil, SyncWoSResult{}, fmt.Errorf("failed to parse WoS records: %w", err)
 	}
 
-	return &mcp.CallToolResult{}, UploadWoSResult{
-		Status:   "success",
-		Filename: safeName,
-		Size:     written,
-	}, nil
-}
-
-func (s *APIServer) handleImportWoSDoisMCP(ctx context.Context, req *mcp.CallToolRequest, args ImportWoSDoisArgs) (*mcp.CallToolResult, ImportWoSDoisResult, error) {
-	project := args.Project
-	if project == "" {
-		project = s.currentProject
-	}
-
-	if args.Filename == "" {
-		return nil, ImportWoSDoisResult{}, fmt.Errorf("filename parameter is required")
-	}
-
-	_, _, _, dbDir, uploadsDir := s.getProjectPaths(project)
-	filePath := filepath.Join(uploadsDir, args.Filename)
+	// 3. Collect DOIs from DuckDB database
 	dbPath := filepath.Join(dbDir, "papers.db")
-
-	if _, err := os.Stat(filePath); err != nil {
-		return nil, ImportWoSDoisResult{}, fmt.Errorf("file %q not found in uploads", args.Filename)
-	}
-
-	ext := strings.ToLower(filepath.Ext(filePath))
-	var err error
-	if ext == ".csv" {
-		err = wos.ImportWoSCSV(filePath, dbPath)
-	} else if ext == ".xlsx" || ext == ".xls" {
-		err = wos.ImportWoSExcel(filePath, dbPath)
-	} else {
-		return nil, ImportWoSDoisResult{}, fmt.Errorf("unsupported file extension %q for direct import", ext)
-	}
-
-	if err != nil {
-		return nil, ImportWoSDoisResult{}, fmt.Errorf("WoS import failed: %w", err)
-	}
-
 	dbConn, err := sql.Open("duckdb", dbPath)
-	var count int
-	if err == nil {
-		defer dbConn.Close()
-		dbConn.QueryRow("SELECT COUNT(*) FROM wos_records").Scan(&count)
-	}
-
-	return &mcp.CallToolResult{}, ImportWoSDoisResult{
-		Status:          "success",
-		ImportedRecords: count,
-	}, nil
-}
-
-func (s *APIServer) handleSyncWoSOpenAlexMCP(ctx context.Context, req *mcp.CallToolRequest, args SyncWoSOpenAlexArgs) (*mcp.CallToolResult, SyncWoSOpenAlexResult, error) {
-	project := args.Project
-	if project == "" {
-		project = s.currentProject
-	}
-
-	if args.Filename == "" {
-		return nil, SyncWoSOpenAlexResult{}, fmt.Errorf("filename is required")
-	}
-
-	_, _, _, dbDir, uploadsDir := s.getProjectPaths(project)
-	filePath := filepath.Join(uploadsDir, args.Filename)
-	dbPath := filepath.Join(dbDir, "papers.db")
-
-	if _, err := os.Stat(filePath); err != nil {
-		return nil, SyncWoSOpenAlexResult{}, fmt.Errorf("file %q not found in uploads", args.Filename)
-	}
-
-	report, err := wos.CompareDOIs(filePath, dbPath)
 	if err != nil {
-		return nil, SyncWoSOpenAlexResult{}, fmt.Errorf("sync comparison failed: %w", err)
+		return nil, SyncWoSResult{}, fmt.Errorf("failed to open papers database: %w", err)
 	}
 
-	return &mcp.CallToolResult{}, SyncWoSOpenAlexResult{
+	existingDOIs := make(map[string]bool)
+	rows, err := dbConn.Query("SELECT doi FROM papers WHERE doi IS NOT NULL")
+	if err == nil {
+		for rows.Next() {
+			var doi string
+			if err := rows.Scan(&doi); err == nil {
+				norm := wos.NormalizeDOI(doi)
+				if norm != "" {
+					existingDOIs[norm] = true
+				}
+			}
+		}
+		rows.Close()
+	}
+	dbConn.Close()
+
+	// 4. Identify missing DOIs
+	var missingDOIs []string
+	for _, rec := range records {
+		doi := wos.NormalizeDOI(rec["DOI"])
+		if doi != "" && !existingDOIs[doi] {
+			missingDOIs = append(missingDOIs, doi)
+		}
+	}
+
+	// 5. Fetch missing DOIs from OpenAlex and write to temp JSONL
+	var fetchedCount int
+	var errors []string
+
+	if len(missingDOIs) > 0 {
+		cfg, err := config.LoadConfig(configDBPath)
+		if err != nil {
+			return nil, SyncWoSResult{}, fmt.Errorf("failed to load configuration: %w", err)
+		}
+		client := openalex.NewClient(cfg.API.Keys, cfg.API.Email, 200, 5, 3, 1)
+
+		tempJSONLPath := filepath.Join(jsonlDir, "wos_sync_temp.jsonl")
+		tempFile, err := os.Create(tempJSONLPath)
+		if err != nil {
+			return nil, SyncWoSResult{}, fmt.Errorf("failed to create temp JSONL file: %w", err)
+		}
+
+		// Fetch in small batches
+		batchSize := 20
+		for i := 0; i < len(missingDOIs); i += batchSize {
+			end := i + batchSize
+			if end > len(missingDOIs) {
+				end = len(missingDOIs)
+			}
+			batch := missingDOIs[i:end]
+			batchFilter := "doi:" + strings.Join(batch, "|")
+
+			resp, err := client.FetchPage(ctx, batchFilter, "*")
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("failed to fetch batch %d-%d from OpenAlex: %v", i, end, err))
+				continue
+			}
+
+			if resp != nil {
+				for _, w := range resp.Results {
+					data, err := json.Marshal(w)
+					if err == nil {
+						tempFile.Write(data)
+						tempFile.WriteString("\n")
+						fetchedCount++
+					}
+				}
+			}
+		}
+		tempFile.Close()
+
+		// 6. Ingest temp JSONL if papers were fetched
+		if fetchedCount > 0 {
+			dbMgr, err := s.getDBMgr(project)
+			if err == nil {
+				dbMgr.CreateSchema()
+				dbMgr.LoadJSONL(tempJSONLPath, nil)
+			} else {
+				errors = append(errors, "failed to initialize DB manager to load new papers: "+err.Error())
+			}
+		}
+
+		// Cleanup temp JSONL
+		os.Remove(tempJSONLPath)
+	}
+
+	// 7. Calculate overlap metrics using the CompareDOIs logic
+	report, err := wos.CompareDOIs(args.FilePath, dbPath)
+	if err != nil {
+		return nil, SyncWoSResult{}, fmt.Errorf("sync comparison calculation failed: %w", err)
+	}
+
+	return &mcp.CallToolResult{}, SyncWoSResult{
 		TotalWoS:          report.TotalWoS,
 		TotalDB:           report.TotalDB,
 		ExactDOIMatches:   report.ExactDOIMatches,
 		FuzzyTitleMatches: report.FuzzyTitleMatches,
 		OverlapPercentage: report.OverlapPercent,
+		NewPapersFetched:  fetchedCount,
+		Errors:            errors,
 	}, nil
 }

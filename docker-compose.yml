@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  backend:
+    container_name: stratum-backend
+
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    ports:
+      - "8080:8080"
+
+    working_dir: /app
+
+    volumes:
+      # Mount the entire project for live development
+      - .:/app
+
+      # Persist DuckDB databases
+      - ./data:/app/data
+      - ./projects:/app/projects
+
+      # Cache Go modules
+      - go-mod-cache:/go/pkg/mod
+
+    environment:
+      CGO_ENABLED: "1"
+
+    command: go run main.go
+
+    stdin_open: true
+    tty: true
+
+volumes:
+  go-mod-cache:
