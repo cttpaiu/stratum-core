@@ -1,0 +1,17 @@
+.git
+.gitignore
+
+node_modules
+web/node_modules
+website/node_modules
+
+website/build
+
+.vscode
+.idea
+
+*.log
+
+.env
+
+.DS_Store
