@@ -8,4 +8,4 @@ Academic search queries are prone to:
 2.  **Indexing Gaps**: Many academic papers do not contain ROR identifiers or country codes out of the box.
 3.  **Topic Variance**: Important studies are spread across computer science, physics, and materials engineering.
 
-By separating query discovery (TF-IDF), validation (anchor papers, random sampling), collection (concurrent fetching), and enrichment (Crossref, LLM, PDF imputation), we can construct a verified, clean, and normalized dataset suitable for downstream technology analysis.
+By separating query discovery (TF-IDF & semantic re-ranking), validation (anchor papers, random sampling), collection (concurrent fetching), pre-ingestion country imputation (ROR registry lookups & multi-tier gazetteers), and deep in-database enrichment (Crossref, LLM, PDF imputation), we can construct a verified, clean, and normalized dataset suitable for downstream technology analysis.

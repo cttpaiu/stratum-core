@@ -11,6 +11,8 @@ import {
   Loader2,
   CheckCircle,
   Database,
+  Download,
+  Square,
 } from 'lucide-react'
 import { mockMetrics } from '../lib/mock-stratum'
 
@@ -205,6 +207,43 @@ export function Index() {
     }
   }
 
+  const handleDownloadPapers = async () => {
+    if (syncing) {
+      alert('Pipeline or download execution running in Go background thread. Waiting for completion.')
+      return
+    }
+
+    setSyncing(true)
+    setProgress(0)
+    setLogs([
+      '[' + new Date().toLocaleTimeString() + '] [INFO] Initiating paper download (openalex download)...',
+    ])
+
+    try {
+      const response = await fetch(`/api/download-papers?project=${activeProject}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ output: 'collected_papers.jsonl' }),
+      })
+      if (!response.ok) {
+        const data = await response.json()
+        alert(data.error || 'Failed to start download')
+        setSyncing(false)
+      }
+    } catch (err: unknown) {
+      alert('Connection failed: ' + (err instanceof Error ? err.message : String(err)))
+      setSyncing(false)
+    }
+  }
+
+  const handleCancelPipeline = async () => {
+    try {
+      await fetch(`/api/pipeline/cancel?project=${activeProject}`, { method: 'POST' })
+    } catch (err) {
+      console.error('Failed to cancel pipeline:', err)
+    }
+  }
+
   // Derive metrics
   const totalPapers = stats ? stats.total_papers : mockMetrics.totalPapers
   const imputedInstitutions = stats ? stats.total_institutions : mockMetrics.imputedInstitutions
@@ -340,26 +379,48 @@ export function Index() {
             </span>
           </div>
 
-          <button
-            onClick={handleSyncToggle}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded font-mono text-xs select-none border transition-all ${
-              syncing
-                ? 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-700 cursor-not-allowed'
-                : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-800 dark:border-zinc-200 hover:bg-zinc-800 dark:hover:bg-zinc-200 cursor-pointer'
-            }`}
-          >
+          <div className="flex items-center gap-2">
             {syncing ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Syncing Pipeline...</span>
-              </>
+              <button
+                onClick={handleCancelPipeline}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-xs select-none border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 cursor-pointer transition shadow-sm"
+                title="Stop / Cancel running pipeline"
+              >
+                <Square className="h-3 w-3 fill-current" />
+                <span>Stop Pipeline</span>
+              </button>
             ) : (
-              <>
-                <Play className="h-3 w-3 fill-current" />
-                <span>Run OpenAlex Sync</span>
-              </>
+              <button
+                onClick={handleDownloadPapers}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded font-mono text-xs select-none border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-850 cursor-pointer shadow-sm transition"
+                title="Download all papers to JSONL (openalex download)"
+              >
+                <Download className="h-3 w-3" />
+                <span>Download Papers</span>
+              </button>
             )}
-          </button>
+
+            <button
+              onClick={handleSyncToggle}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded font-mono text-xs select-none border transition-all ${
+                syncing
+                  ? 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-700 cursor-not-allowed'
+                  : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-800 dark:border-zinc-200 hover:bg-zinc-800 dark:hover:bg-zinc-200 cursor-pointer'
+              }`}
+            >
+              {syncing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Syncing Pipeline...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-3 w-3 fill-current" />
+                  <span>Run OpenAlex Sync</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Console Progress Bar */}

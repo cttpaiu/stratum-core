@@ -1,12 +1,212 @@
 // src/routes/wos.tsx
-import { useState } from 'react'
-import { Upload, Play, Terminal, Database, Key } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Upload, Play, Terminal, Database, Key, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+
+/**
+ * ASSUMPTIONS — adjust to match your real Go backend:
+ *
+ * 1. POST /api/wos/import
+ *    - multipart/form-data: file, doiColumn, authorColumn
+ *    - response JSON: { catalogId: string, recordCount: number }
+ *
+ * 2. POST /api/wos/impute
+ *    - JSON body: { catalogId, provider, model, apiKey?, ollamaUrl? }
+ *    - response: newline-delimited JSON (NDJSON) stream, each line like:
+ *      { "level": "info" | "error" | "done", "message": string }
+ *      Read as a stream so logs appear incrementally. If your Go server
+ *      just returns a single JSON blob instead of streaming, swap
+ *      handleRunImputation's reader loop for a plain `await res.json()`.
+ *
+ * 3. Spreadsheet parsing uses the `xlsx` (SheetJS) package for .xls/.xlsx.
+ *    Install if missing: npm install xlsx
+ *
+ * 4. WoS Plain Text (.txt) exports use two-letter field tags (DI = DOI,
+ *    AU = Authors) rather than columns, so there's no column mapping step
+ *    for that format — doiColumn/authorColumn are auto-set to 'DI'/'AU'.
+ */
+
+type LogLevel = 'info' | 'error' | 'done'
+type LogEntry = { time: string; level: LogLevel; message: string }
+type Status = 'standby' | 'parsing' | 'importing' | 'imported' | 'running' | 'done' | 'error'
+
+const NO_COLUMNS_FORMATS = ['txt']
 
 export function Wos() {
   const [imputeProvider, setImputeProvider] = useState<'gemini' | 'ollama'>('gemini')
   const [modelName, setModelName] = useState('gemini-1.5-flash')
   const [apiKey, setApiKey] = useState('')
   const [ollamaURL, setOllamaURL] = useState('http://localhost:11434')
+
+  const [file, setFile] = useState<File | null>(null)
+  const [headers, setHeaders] = useState<string[]>([])
+  const [doiColumn, setDoiColumn] = useState('')
+  const [authorColumn, setAuthorColumn] = useState('')
+  const [catalogId, setCatalogId] = useState<string | null>(null)
+
+  const [status, setStatus] = useState<Status>('standby')
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { time: new Date().toLocaleTimeString(), level: 'info', message: 'Ready for WoS data import and imputation.' },
+    { time: new Date().toLocaleTimeString(), level: 'info', message: 'Stage a Web of Science export catalog to trigger diagnostics checking.' },
+  ])
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  function log(level: LogLevel, message: string) {
+    setLogs((prev) => [...prev, { time: new Date().toLocaleTimeString(), level, message }])
+  }
+
+  function extOf(name: string) {
+    return name.split('.').pop()?.toLowerCase() ?? ''
+  }
+
+  async function parseFile(f: File) {
+    setStatus('parsing')
+    setFile(f)
+    setHeaders([])
+    setDoiColumn('')
+    setAuthorColumn('')
+    setCatalogId(null)
+    log('info', `Selected file: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`)
+
+    const ext = extOf(f.name)
+
+    try {
+      if (ext === 'csv') {
+        const text = await f.text()
+        const firstLine = text.split(/\r?\n/)[0] ?? ''
+        const cols = firstLine.split(',').map((c) => c.trim().replace(/^"|"$/g, ''))
+        setHeaders(cols)
+        log('info', `Parsed CSV header row: ${cols.length} columns detected.`)
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const XLSX = await import('xlsx')
+        const buf = await f.arrayBuffer()
+        const wb = XLSX.read(buf, { type: 'array' })
+        const sheetName = wb.SheetNames[0]
+        const sheet = wb.Sheets[sheetName]
+        const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 0 })
+        const cols = ((rows[0] as unknown[]) ?? []).map((c) => String(c ?? '').trim())
+        setHeaders(cols)
+        log('info', `Parsed sheet "${sheetName}": ${cols.length} columns detected.`)
+      } else if (ext === 'txt') {
+        // WoS Plain Text: tag-based, not columnar. Auto-map known tags.
+        setDoiColumn('DI')
+        setAuthorColumn('AU')
+        const text = await f.text()
+        const recordCount = (text.match(/^ER\s*$/gm) ?? []).length
+        log('info', `Parsed WoS Plain Text export: ~${recordCount} record(s) found (DI/AU tags auto-mapped).`)
+      } else {
+        throw new Error(`Unsupported file type: .${ext}`)
+      }
+      setStatus('standby')
+    } catch (err) {
+      setStatus('error')
+      log('error', `Failed to parse file: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) parseFile(f)
+    e.target.value = '' // allow re-selecting the same file
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f) parseFile(f)
+  }
+
+  const usesColumns = file ? !NO_COLUMNS_FORMATS.includes(extOf(file.name)) : true
+  const canImport = !!file && (!usesColumns || (!!doiColumn && !!authorColumn)) && status !== 'importing' && status !== 'parsing'
+
+  async function handleImport() {
+    if (!file) return
+    setStatus('importing')
+    log('info', `Importing catalog "${file.name}"...`)
+
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('doiColumn', doiColumn)
+      form.append('authorColumn', authorColumn)
+
+      const res = await fetch('/api/wos/import', { method: 'POST', body: form })
+      if (!res.ok) throw new Error(`Import failed: HTTP ${res.status}`)
+      const data = await res.json() as { catalogId: string; recordCount: number }
+
+      setCatalogId(data.catalogId)
+      setStatus('imported')
+      log('info', `Imported ${data.recordCount} record(s). Catalog ID: ${data.catalogId}`)
+    } catch (err) {
+      setStatus('error')
+      log('error', `Import error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const providerConfigured =
+    imputeProvider === 'gemini' ? apiKey.trim().length > 0 : ollamaURL.trim().length > 0
+
+  const canRunImputation = !!catalogId && providerConfigured && status !== 'running'
+
+  async function handleRunImputation() {
+    if (!catalogId) return
+    setStatus('running')
+    log('info', `Starting imputation pipeline (${imputeProvider} / ${modelName})...`)
+
+    try {
+      const res = await fetch('/api/wos/impute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          catalogId,
+          provider: imputeProvider,
+          model: modelName,
+          apiKey: imputeProvider === 'gemini' ? apiKey : undefined,
+          ollamaUrl: imputeProvider === 'ollama' ? ollamaURL : undefined,
+        }),
+      })
+      if (!res.ok || !res.body) throw new Error(`Imputation failed: HTTP ${res.status}`)
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const parsed = JSON.parse(line) as { level: LogLevel; message: string }
+            log(parsed.level, parsed.message)
+            if (parsed.level === 'done') setStatus('done')
+          } catch {
+            log('info', line)
+          }
+        }
+      }
+      if (status !== 'error') setStatus((s) => (s === 'running' ? 'done' : s))
+      log('info', 'Imputation pipeline finished.')
+    } catch (err) {
+      setStatus('error')
+      log('error', `Imputation error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const statusBadge: Record<Status, { label: string; className: string }> = {
+    standby: { label: 'Standby', className: 'bg-zinc-100 dark:bg-zinc-900 border-zinc-250 dark:border-zinc-800 text-zinc-500' },
+    parsing: { label: 'Parsing', className: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-600' },
+    importing: { label: 'Importing', className: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-600' },
+    imported: { label: 'Imported', className: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-600' },
+    running: { label: 'Running', className: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-600' },
+    done: { label: 'Done', className: 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 text-green-600' },
+    error: { label: 'Error', className: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-600' },
+  }
 
   return (
     <div className="flex flex-col gap-8 w-full font-sans">
@@ -34,10 +234,31 @@ export function Wos() {
               </p>
 
               {/* Upload Box */}
-              <div className="border border-dashed border-zinc-300 dark:border-zinc-800 rounded p-6 flex flex-col items-center justify-center gap-3 bg-zinc-50/50 dark:bg-zinc-900/10 hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition cursor-pointer mt-1">
-                <Upload className="h-6 w-6 text-zinc-400" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.xls,.xlsx"
+                className="hidden"
+                onChange={onFileInputChange}
+              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={onDrop}
+                className={`border border-dashed rounded p-6 flex flex-col items-center justify-center gap-3 transition cursor-pointer mt-1 ${
+                  isDragging
+                    ? 'border-zinc-500 bg-zinc-100 dark:bg-zinc-900/50'
+                    : 'border-zinc-300 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/10 hover:bg-zinc-50 dark:hover:bg-zinc-900/30'
+                }`}
+              >
+                {status === 'parsing' ? (
+                  <Loader2 className="h-6 w-6 text-zinc-400 animate-spin" />
+                ) : (
+                  <Upload className="h-6 w-6 text-zinc-400" />
+                )}
                 <span className="text-xs font-mono font-bold text-zinc-600 dark:text-zinc-400 uppercase">
-                  Choose WoS catalog file...
+                  {file ? file.name : 'Choose WoS catalog file...'}
                 </span>
                 <span className="text-[10px] text-zinc-400">
                   Accepts .txt (WoS Plain Text), .csv, .xls, or .xlsx
@@ -50,16 +271,32 @@ export function Wos() {
                   <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-450">
                     DOI Column
                   </label>
-                  <select disabled className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-1.5 rounded font-mono text-xs text-zinc-400">
-                    <option>Select column...</option>
+                  <select
+                    disabled={!usesColumns || headers.length === 0}
+                    value={doiColumn}
+                    onChange={(e) => setDoiColumn(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-1.5 rounded font-mono text-xs text-zinc-700 dark:text-zinc-300 disabled:text-zinc-400"
+                  >
+                    <option value="">{usesColumns ? 'Select column...' : 'Auto-mapped (DI)'}</option>
+                    {headers.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-450">
                     Author Column
                   </label>
-                  <select disabled className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-1.5 rounded font-mono text-xs text-zinc-400">
-                    <option>Select column...</option>
+                  <select
+                    disabled={!usesColumns || headers.length === 0}
+                    value={authorColumn}
+                    onChange={(e) => setAuthorColumn(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-1.5 rounded font-mono text-xs text-zinc-700 dark:text-zinc-300 disabled:text-zinc-400"
+                  >
+                    <option value="">{usesColumns ? 'Select column...' : 'Auto-mapped (AU)'}</option>
+                    {headers.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -67,10 +304,19 @@ export function Wos() {
 
             <button
               type="button"
-              disabled
-              className="w-full flex items-center justify-center gap-2 mt-2 px-3 py-2 border border-zinc-250 dark:border-zinc-800 rounded font-mono text-xs font-bold uppercase bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 cursor-not-allowed select-none"
+              disabled={!canImport}
+              onClick={handleImport}
+              className={`w-full flex items-center justify-center gap-2 mt-2 px-3 py-2 border rounded font-mono text-xs font-bold uppercase select-none transition ${
+                canImport
+                  ? 'border-zinc-800 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:opacity-90 cursor-pointer'
+                  : 'border-zinc-250 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+              }`}
             >
-              <Database className="h-3.5 w-3.5 shrink-0" />
+              {status === 'importing' ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Database className="h-3.5 w-3.5 shrink-0" />
+              )}
               Import & Parse Catalog
             </button>
           </div>
@@ -177,14 +423,30 @@ export function Wos() {
                   />
                 </div>
               )}
+
+              {catalogId && (
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 mt-1">
+                  <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                  Catalog ready: {catalogId}
+                </div>
+              )}
             </div>
 
             <button
               type="button"
-              disabled
-              className="w-full flex items-center justify-center gap-2 mt-2 px-3 py-2 border border-zinc-250 dark:border-zinc-800 rounded font-mono text-xs font-bold uppercase bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 cursor-not-allowed select-none"
+              disabled={!canRunImputation}
+              onClick={handleRunImputation}
+              className={`w-full flex items-center justify-center gap-2 mt-2 px-3 py-2 border rounded font-mono text-xs font-bold uppercase select-none transition ${
+                canRunImputation
+                  ? 'border-zinc-800 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:opacity-90 cursor-pointer'
+                  : 'border-zinc-250 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
+              }`}
             >
-              <Play className="h-3.5 w-3.5 shrink-0" />
+              {status === 'running' ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5 shrink-0" />
+              )}
               Run Imputation Pipeline
             </button>
           </div>
@@ -200,18 +462,27 @@ export function Wos() {
               3. Imputation Diagnostics & Logs
             </span>
           </div>
-          <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-250 dark:border-zinc-800 text-zinc-500 font-mono text-[9px] font-bold uppercase">
-            Standby
+          <span className={`px-2 py-0.5 rounded border font-mono text-[9px] font-bold uppercase ${statusBadge[status].className}`}>
+            {statusBadge[status].label}
           </span>
         </div>
 
         <div className="bg-zinc-950 text-zinc-100 p-4 rounded font-mono text-[10px] min-h-[10rem] flex flex-col gap-1.5 leading-relaxed overflow-y-auto max-h-60 border border-zinc-900 text-left">
-          <span className="text-zinc-500">
-            [{new Date().toLocaleTimeString()}] [INFO] Ready for WoS data import and imputation.
-          </span>
-          <span className="text-zinc-500">
-            [{new Date().toLocaleTimeString()}] [INFO] Stage a Web of Science export catalog to trigger diagnostics checking.
-          </span>
+          {logs.map((entry, i) => (
+            <span
+              key={i}
+              className={
+                entry.level === 'error'
+                  ? 'text-red-400'
+                  : entry.level === 'done'
+                  ? 'text-green-400'
+                  : 'text-zinc-500'
+              }
+            >
+              [{entry.time}] [{entry.level.toUpperCase()}] {entry.message}
+              {entry.level === 'error' && <XCircle className="inline h-2.5 w-2.5 ml-1" />}
+            </span>
+          ))}
         </div>
       </div>
     </div>

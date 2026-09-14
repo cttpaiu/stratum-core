@@ -50,6 +50,7 @@ type Work struct {
 	CitationPercentile        PercentileInfo    `json:"citation_normalized_percentile"`
 	FWCI                      float64           `json:"fwci"`
 	PrimaryTopic              TopicInfo         `json:"primary_topic"`
+	Topics                    []TopicInfo       `json:"topics"`
 	InstitutionsDistinctCount int               `json:"institutions_distinct_count"`
 	CountriesDistinctCount    int               `json:"countries_distinct_count"`
 	AbstractInvertedIndex     map[string][]int  `json:"abstract_inverted_index"`
@@ -239,9 +240,16 @@ func (c *OpenAlexClient) doRequest(ctx context.Context, req *http.Request) ([]by
 
 		resp, err := c.httpClient.Do(currReq)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			lastErr = err
 			if attempt < c.maxRetries-1 {
-				time.Sleep(time.Duration(c.retryDelay) * time.Second)
+				select {
+				case <-time.After(time.Duration(c.retryDelay) * time.Second):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			}
 			continue
 		}
@@ -249,9 +257,16 @@ func (c *OpenAlexClient) doRequest(ctx context.Context, req *http.Request) ([]by
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			lastErr = err
 			if attempt < c.maxRetries-1 {
-				time.Sleep(time.Duration(c.retryDelay) * time.Second)
+				select {
+				case <-time.After(time.Duration(c.retryDelay) * time.Second):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 			}
 			continue
 		}
@@ -331,7 +346,11 @@ func (c *OpenAlexClient) GetTotalCount(ctx context.Context, apiFilter string) (i
 		return 0, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	body, err := c.doRequest(ctx, req)
@@ -361,7 +380,7 @@ func (c *OpenAlexClient) FetchPage(ctx context.Context, apiFilter string, cursor
 	q.Set("filter", apiFilter)
 	q.Set("per_page", fmt.Sprintf("%d", c.perPage))
 	q.Set("cursor", cursor)
-	q.Set("select", "id,doi,title,publication_year,publication_date,type,primary_location,open_access,cited_by_count,citation_normalized_percentile,fwci,primary_topic,authorships,institutions_distinct_count,countries_distinct_count,updated_date,abstract_inverted_index")
+	q.Set("select", "id,doi,title,publication_year,publication_date,type,primary_location,open_access,cited_by_count,citation_normalized_percentile,fwci,primary_topic,topics,authorships,institutions_distinct_count,countries_distinct_count,updated_date,abstract_inverted_index")
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
@@ -369,7 +388,11 @@ func (c *OpenAlexClient) FetchPage(ctx context.Context, apiFilter string, cursor
 		return nil, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	body, err := c.doRequest(ctx, req)
@@ -407,7 +430,11 @@ func (c *OpenAlexClient) FetchPageRaw(ctx context.Context, apiFilter string, cur
 		return nil, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	return c.doRequest(ctx, req)
@@ -435,7 +462,11 @@ func (c *OpenAlexClient) FetchSamplePage(ctx context.Context, apiFilter string, 
 		return nil, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	body, err := c.doRequest(ctx, req)
@@ -562,28 +593,76 @@ func buildFilter(keywords string, topics []string, dateFrom string, dateTo strin
 	if len(topics) > 0 {
 		parts = append(parts, "primary_topic.id:"+strings.Join(topics, "|"))
 	}
-	parts = append(parts, "from_publication_date:"+dateFrom)
-	parts = append(parts, "to_publication_date:"+dateTo)
+	if dateFrom != "" {
+		parts = append(parts, "from_publication_date:"+dateFrom)
+	}
+	if dateTo != "" {
+		parts = append(parts, "to_publication_date:"+dateTo)
+	}
 	if len(docTypes) > 0 {
 		parts = append(parts, "type:"+strings.Join(docTypes, "|"))
 	}
 	return strings.Join(parts, ",")
 }
 
+// BuildFilter builds an OpenAlex API filter string matching openalex CLI conventions.
+func BuildFilter(keywords string, topics []string, dateFrom string, dateTo string, docTypes []string) string {
+	return buildFilter(keywords, topics, dateFrom, dateTo, docTypes)
+}
+
+// DownloadOptions customizes paper downloading behavior to match openalex download command.
+type DownloadOptions struct {
+	NoTopics        bool
+	Deduplicate     bool
+	BatchSizeTopics int
+	TotalExpected   int
+}
+
+// DownloadStats reports counts, sizes, and duration of the download run.
+type DownloadStats struct {
+	TotalExpected     int           `json:"total_expected"`
+	Collected         int64         `json:"collected"`
+	NewPapers         int64         `json:"new_papers"`
+	ExistingPapers    int64         `json:"existing_papers"`
+	DuplicatesSkipped int64         `json:"duplicates_skipped"`
+	OutputJSONL       string        `json:"output_jsonl"`
+	FileSize          int64         `json:"file_size"`
+	Duration          time.Duration `json:"duration"`
+}
+
 // DownloadPapers initiates concurrent download tasks and writes matching works to a JSONL file.
 // It supports resuming from a cursor progress file.
 func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConfig, outputJSONL string, progressChan chan<- int) error {
+	_, err := c.DownloadPapersWithOptions(ctx, cfg, outputJSONL, DownloadOptions{
+		Deduplicate: false,
+	}, progressChan, nil)
+	return err
+}
+
+// DownloadPapersWithOptions runs async JSONL download following openalex download CLI functionality.
+// It supports pre-flight logging, topics filtering toggle (--no-topics), deduplication, and resume tracking.
+func (c *OpenAlexClient) DownloadPapersWithOptions(
+	ctx context.Context,
+	cfg *config.AppConfig,
+	outputJSONL string,
+	opts DownloadOptions,
+	progressChan chan<- int,
+	logChan chan<- string,
+) (*DownloadStats, error) {
+	startTime := time.Now()
 	keywords := cfg.Keywords
 
 	errors := ValidateKeywords(keywords)
 	if len(errors) > 0 {
-		return fmt.Errorf("keyword validation failed: %s", strings.Join(errors, "; "))
+		return nil, fmt.Errorf("keyword validation failed: %s", strings.Join(errors, "; "))
 	}
 
 	var topics []string
-	for _, tp := range cfg.Topics {
-		if ValidateTopicFormat(tp) {
-			topics = append(topics, tp)
+	if !opts.NoTopics {
+		for _, tp := range cfg.Topics {
+			if ValidateTopicFormat(tp) {
+				topics = append(topics, tp)
+			}
 		}
 	}
 
@@ -596,17 +675,38 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 	}
 
 	var resumeCount int
+	seenIDs := make(map[string]struct{})
+	var seenMu sync.Mutex
+
 	if file, err := os.Open(outputJSONL); err == nil {
 		scanner := bufio.NewScanner(file)
+		buf := make([]byte, 1024*1024)
+		scanner.Buffer(buf, 10*1024*1024)
 		for scanner.Scan() {
-			if strings.TrimSpace(scanner.Text()) != "" {
+			txt := strings.TrimSpace(scanner.Text())
+			if txt != "" {
 				resumeCount++
+				if opts.Deduplicate {
+					var idObj struct {
+						ID string `json:"id"`
+					}
+					if json.Unmarshal([]byte(txt), &idObj) == nil && idObj.ID != "" {
+						seenIDs[idObj.ID] = struct{}{}
+					}
+				}
 			}
 		}
 		file.Close()
 	}
 
+	if opts.Deduplicate && len(seenIDs) > 0 {
+		resumeCount = len(seenIDs)
+	}
+
 	var collectedCount int64 = int64(resumeCount)
+	var newPapersCount int64 = 0
+	var duplicatesSkipped int64 = 0
+
 	if progressChan != nil {
 		select {
 		case progressChan <- int(collectedCount):
@@ -614,10 +714,14 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 		}
 	}
 
+	if logChan != nil && resumeCount > 0 {
+		logChan <- fmt.Sprintf("[INFO] Found %d existing papers in output file. Resuming from saved cursors.", resumeCount)
+	}
+
 	// Open file for appending
 	f, err := os.OpenFile(outputJSONL, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 
@@ -625,7 +729,10 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 	defer writer.Flush()
 
 	var batches [][]string
-	batchSize := cfg.Collection.BatchSizeTopics
+	batchSize := opts.BatchSizeTopics
+	if batchSize <= 0 {
+		batchSize = cfg.Collection.BatchSizeTopics
+	}
 	if batchSize <= 0 {
 		batchSize = 55
 	}
@@ -663,7 +770,25 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 				defer func() { <-sem }()
 			}
 
-			err := c.processBatch(ctx, cfg, batchData, batchIdx, keywords, topics, writer, &progressState, &progressMutex, progressPath, &collectedCount, progressChan)
+			err := c.processBatch(
+				ctx,
+				cfg,
+				batchData,
+				batchIdx,
+				keywords,
+				topics,
+				writer,
+				&progressState,
+				&progressMutex,
+				progressPath,
+				&collectedCount,
+				&newPapersCount,
+				&duplicatesSkipped,
+				seenIDs,
+				&seenMu,
+				opts.Deduplicate,
+				progressChan,
+			)
 			if err != nil {
 				errOnce.Do(func() {
 					downloadErr = err
@@ -674,7 +799,7 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 	wg.Wait()
 
 	if downloadErr != nil {
-		return downloadErr
+		return nil, downloadErr
 	}
 
 	// Verify if all batches are done
@@ -692,7 +817,23 @@ func (c *OpenAlexClient) DownloadPapers(ctx context.Context, cfg *config.AppConf
 		os.Remove(progressPath)
 	}
 
-	return nil
+	fileSize := int64(0)
+	if fi, err := os.Stat(outputJSONL); err == nil {
+		fileSize = fi.Size()
+	}
+
+	stats := &DownloadStats{
+		TotalExpected:     opts.TotalExpected,
+		Collected:         atomic.LoadInt64(&collectedCount),
+		NewPapers:         atomic.LoadInt64(&newPapersCount),
+		ExistingPapers:    int64(resumeCount),
+		DuplicatesSkipped: atomic.LoadInt64(&duplicatesSkipped),
+		OutputJSONL:       outputJSONL,
+		FileSize:          fileSize,
+		Duration:          time.Since(startTime),
+	}
+
+	return stats, nil
 }
 
 func (c *OpenAlexClient) processBatch(
@@ -707,6 +848,11 @@ func (c *OpenAlexClient) processBatch(
 	progressMutex *sync.Mutex,
 	progressPath string,
 	collectedCount *int64,
+	newPapersCount *int64,
+	duplicatesSkipped *int64,
+	seenIDs map[string]struct{},
+	seenMu *sync.Mutex,
+	deduplicate bool,
 	progressChan chan<- int,
 ) error {
 	batchKey := fmt.Sprintf("%d", batchIdx)
@@ -778,10 +924,31 @@ func (c *OpenAlexClient) processBatch(
 		nextCursor := pageResp.Meta.NextCursor
 
 		for _, paper := range pageResp.Results {
+			if deduplicate {
+				var idHolder struct {
+					ID string `json:"id"`
+				}
+				if json.Unmarshal(paper, &idHolder) == nil && idHolder.ID != "" {
+					seenMu.Lock()
+					if _, exists := seenIDs[idHolder.ID]; exists {
+						seenMu.Unlock()
+						if duplicatesSkipped != nil {
+							atomic.AddInt64(duplicatesSkipped, 1)
+						}
+						continue
+					}
+					seenIDs[idHolder.ID] = struct{}{}
+					seenMu.Unlock()
+				}
+			}
+
 			if err := writer.WriteLine(paper); err != nil {
 				return err
 			}
 			atomic.AddInt64(collectedCount, 1)
+			if newPapersCount != nil {
+				atomic.AddInt64(newPapersCount, 1)
+			}
 			if progressChan != nil {
 				select {
 				case progressChan <- int(atomic.LoadInt64(collectedCount)):
@@ -915,7 +1082,11 @@ func (c *OpenAlexClient) checkTopicExist(ctx context.Context, topicID string) (b
 		return false, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	_, err = c.doRequest(ctx, req)
@@ -1013,7 +1184,11 @@ func (c *OpenAlexClient) FetchGroupBy(ctx context.Context, apiFilter string, gro
 		return nil, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	body, err := c.doRequest(ctx, req)
@@ -1047,7 +1222,11 @@ func (c *OpenAlexClient) FetchTopicDetails(ctx context.Context, topicID string) 
 		return nil, err
 	}
 
-	c.semaphore <- struct{}{}
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	defer func() { <-c.semaphore }()
 
 	body, err := c.doRequest(ctx, req)
@@ -1061,5 +1240,44 @@ func (c *OpenAlexClient) FetchTopicDetails(ctx context.Context, topicID string) 
 	}
 
 	return &details, nil
+}
+
+var doiPrefixRegex = regexp.MustCompile(`(?i)^(?:https?://(?:dx\.)?doi\.org/|doi:)`)
+
+// FetchWorkByDOI retrieves a single work by DOI from OpenAlex (e.g., https://api.openalex.org/works/https://doi.org/...).
+func (c *OpenAlexClient) FetchWorkByDOI(ctx context.Context, doi string) (*Work, error) {
+	baseURL := c.baseURL
+	if baseURL == "" {
+		baseURL = "https://api.openalex.org"
+	}
+	cleanDOI := strings.TrimSpace(doi)
+	cleanDOI = doiPrefixRegex.ReplaceAllString(cleanDOI, "")
+	cleanDOI = strings.TrimSpace(cleanDOI)
+	encoded := url.QueryEscape(cleanDOI)
+
+	urlStr := fmt.Sprintf("%s/works/https://doi.org/%s", baseURL, encoded)
+	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case c.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-c.semaphore }()
+
+	body, err := c.doRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var work Work
+	if err := json.Unmarshal(body, &work); err != nil {
+		return nil, err
+	}
+
+	return &work, nil
 }
 
