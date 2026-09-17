@@ -25,6 +25,7 @@ import (
 // Helper to setup a test directory structure and config files
 func setupTestEnv(t *testing.T) (string, func()) {
 	// Create temporary directories
+	_ = os.RemoveAll("projects")
 	_ = os.MkdirAll("config", 0755)
 	_ = os.MkdirAll("data/jsonl", 0755)
 	_ = os.MkdirAll("data/uploads", 0755)
@@ -86,6 +87,7 @@ anchor_file: "config/anchor.txt"
 		os.Remove("config/anchor.txt")
 		os.RemoveAll("config")
 		os.RemoveAll("data")
+		os.RemoveAll("projects")
 		os.RemoveAll(tmpDir)
 	}
 
@@ -465,6 +467,41 @@ func TestProjectsAndHistory(t *testing.T) {
 		t.Errorf("expected history revision, got 0")
 	} else if configResp.History[0].Label != "Project Created" {
 		t.Errorf("expected initial revision label 'Project Created', got %q", configResp.History[0].Label)
+	}
+
+	// 5. Test deleting "default" (should fail with 400)
+	delDefBody, _ := json.Marshal(map[string]string{"name": "default"})
+	reqDelDef := httptest.NewRequest("POST", "/api/projects/delete", bytes.NewBuffer(delDefBody))
+	wDelDef := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(wDelDef, reqDelDef)
+	if wDelDef.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400 when deleting default project, got %d", wDelDef.Code)
+	}
+
+	// 6. Test deleting non-existent project (should fail with 404)
+	delNonExistentBody, _ := json.Marshal(map[string]string{"name": "non-existent"})
+	reqDelNonExistent := httptest.NewRequest("POST", "/api/projects/delete", bytes.NewBuffer(delNonExistentBody))
+	wDelNonExistent := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(wDelNonExistent, reqDelNonExistent)
+	if wDelNonExistent.Code != http.StatusNotFound {
+		t.Errorf("expected status 404 when deleting non-existent project, got %d", wDelNonExistent.Code)
+	}
+
+	// 7. Test deleting "test-proj" (should succeed with 200)
+	delBody, _ := json.Marshal(map[string]string{"name": "test-proj"})
+	reqDel := httptest.NewRequest("POST", "/api/projects/delete", bytes.NewBuffer(delBody))
+	wDel := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("failed to delete project: %d, body: %s", wDel.Code, wDel.Body.String())
+	}
+
+	// 8. List projects again (should only contain "default")
+	wList3 := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(wList3, reqList)
+	json.NewDecoder(wList3.Body).Decode(&listResp)
+	if len(listResp["projects"]) != 1 || listResp["projects"][0] != "default" {
+		t.Errorf("expected only default project after deletion, got: %v", listResp["projects"])
 	}
 }
 
@@ -971,6 +1008,340 @@ func TestNewMCPTools(t *testing.T) {
 		t.Errorf("expected topics 'T10001\\nT10002', got %q", getResultFull.Topics)
 	}
 }
+
+func TestDownloadPapersRoutes(t *testing.T) {
+	dbPath, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	server := NewAPIServer("localhost:8080", dbPath, "")
+	err := server.RegisterRoutes()
+	if err != nil {
+		t.Fatalf("RegisterRoutes failed: %v", err)
+	}
+
+	// Mock OpenAlex API returning 2 papers for first page and empty for second
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cursor := r.URL.Query().Get("cursor")
+		w.Header().Set("Content-Type", "application/json")
+		if cursor == "*" {
+			fmt.Fprintln(w, `{"meta":{"count":2,"next_cursor":"cursor2"},"results":[{"id":"W1","title":"Paper One"},{"id":"W2","title":"Paper Two"}]}`)
+		} else {
+			fmt.Fprintln(w, `{"meta":{"count":2,"next_cursor":""},"results":[]}`)
+		}
+	}))
+	defer ts.Close()
+
+	mockURL, _ := url.Parse(ts.URL)
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = &redirectTransport{targetURL: mockURL, origTransport: origTransport}
+	defer func() { http.DefaultTransport = origTransport }()
+
+	// Set valid keywords on the default configuration
+	configDBPath, _, _, _, _ := server.getProjectPaths("")
+	cfg, err := config.LoadConfig(configDBPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	cfg.Keywords = "quantum"
+	err = config.SaveConfig(configDBPath, cfg)
+	if err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	// 1. Test GET /api/download/info
+	infoReq := httptest.NewRequest("GET", "/api/download/info", nil)
+	infoW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(infoW, infoReq)
+	if infoW.Code != http.StatusOK {
+		t.Fatalf("download info expected 200, got %d: %s", infoW.Code, infoW.Body.String())
+	}
+	var infoResp struct {
+		Total           int     `json:"total"`
+		EstimatedMB     float64 `json:"estimated_mb"`
+		DefaultFilename string  `json:"default_filename"`
+	}
+	if err := json.NewDecoder(infoW.Body).Decode(&infoResp); err != nil {
+		t.Fatalf("failed to decode info resp: %v", err)
+	}
+	if infoResp.Total != 2 {
+		t.Errorf("expected total 2, got %d", infoResp.Total)
+	}
+	if infoResp.DefaultFilename != "collected_papers.jsonl" {
+		t.Errorf("expected default filename collected_papers.jsonl, got %s", infoResp.DefaultFilename)
+	}
+
+	// 2. Test POST /api/download-papers
+	bodyJSON, _ := json.Marshal(map[string]interface{}{
+		"output":    "test_download.jsonl",
+		"no_topics": true,
+	})
+	dlReq := httptest.NewRequest("POST", "/api/download-papers", bytes.NewBuffer(bodyJSON))
+	dlW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(dlW, dlReq)
+	if dlW.Code != http.StatusOK {
+		t.Fatalf("download-papers expected 200, got %d: %s", dlW.Code, dlW.Body.String())
+	}
+
+	// 3. Wait for background download to finish
+	var status PipelineStatus
+	for i := 0; i < 50; i++ {
+		time.Sleep(50 * time.Millisecond)
+		stReq := httptest.NewRequest("GET", "/api/pipeline/status", nil)
+		stW := httptest.NewRecorder()
+		server.server.Handler.ServeHTTP(stW, stReq)
+		json.NewDecoder(stW.Body).Decode(&status)
+		if !status.Syncing {
+			break
+		}
+	}
+	if status.Syncing {
+		t.Fatalf("download pipeline did not finish in time")
+	}
+
+	// 4. Test GET /api/download/file
+	fileReq := httptest.NewRequest("GET", "/api/download/file?file=test_download.jsonl", nil)
+	fileW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(fileW, fileReq)
+	if fileW.Code != http.StatusOK {
+		t.Fatalf("download file expected 200, got %d", fileW.Code)
+	}
+	if !strings.Contains(fileW.Header().Get("Content-Disposition"), "test_download.jsonl") {
+		t.Errorf("expected Content-Disposition header, got: %s", fileW.Header().Get("Content-Disposition"))
+	}
+
+	// 5. Test POST /api/pipeline/cancel when not running
+	cancelReq := httptest.NewRequest("POST", "/api/pipeline/cancel", nil)
+	cancelW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(cancelW, cancelReq)
+	if cancelW.Code != http.StatusOK {
+		t.Fatalf("cancel expected 200, got %d", cancelW.Code)
+	}
+	var cancelResp map[string]string
+	json.NewDecoder(cancelW.Body).Decode(&cancelResp)
+	if cancelResp["status"] != "not_running" {
+		t.Errorf("expected status 'not_running', got %s", cancelResp["status"])
+	}
+}
+
+func TestImputeRoutes(t *testing.T) {
+	dbPath, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	server := NewAPIServer(":0", dbPath, "")
+	if err := server.RegisterRoutes(); err != nil {
+		t.Fatalf("failed to register routes: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start API server: %v", err)
+	}
+	defer server.Stop(context.Background())
+
+	// 1. Create a dummy JSONL file
+	_ = os.MkdirAll("data/jsonl", 0755)
+	dummyJSONL := "data/jsonl/test_papers.jsonl"
+	_ = os.WriteFile(dummyJSONL, []byte("{\"id\":\"https://openalex.org/W1\",\"authorships\":[]}\n"), 0644)
+	defer os.Remove(dummyJSONL)
+
+	// 2. Test GET /api/impute/files
+	req := httptest.NewRequest("GET", "/api/impute/files", nil)
+	w := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/impute/files, got %d", w.Code)
+	}
+	var filesResp struct {
+		Files []ImputeFileItem `json:"files"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&filesResp); err != nil {
+		t.Fatalf("failed to decode files response: %v", err)
+	}
+	if len(filesResp.Files) == 0 {
+		t.Errorf("expected at least 1 jsonl file in list")
+	}
+
+	// 3. Test GET /api/impute/status
+	statusReq := httptest.NewRequest("GET", "/api/impute/status", nil)
+	statusW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(statusW, statusReq)
+	if statusW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/impute/status, got %d", statusW.Code)
+	}
+	var statusResp ImputeStatus
+	if err := json.NewDecoder(statusW.Body).Decode(&statusResp); err != nil {
+		t.Fatalf("failed to decode status response: %v", err)
+	}
+	if statusResp.Running {
+		t.Errorf("expected Running to be false initially")
+	}
+
+	// 4. Test POST /api/impute/cancel when not running
+	cancelReq := httptest.NewRequest("POST", "/api/impute/cancel", nil)
+	cancelW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(cancelW, cancelReq)
+	if cancelW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/impute/cancel, got %d", cancelW.Code)
+	}
+
+	// 5. Test POST /api/impute/run with missing file
+	badRunBody := bytes.NewBufferString(`{"input_path":"nonexistent.jsonl"}`)
+	badRunReq := httptest.NewRequest("POST", "/api/impute/run", badRunBody)
+	badRunW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(badRunW, badRunReq)
+	if badRunW.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 from /api/impute/run for nonexistent file, got %d", badRunW.Code)
+	}
+}
+
+func TestExportRoutes(t *testing.T) {
+	dbPath, cleanup := setupTestEnv(t)
+	defer cleanup()
+
+	server := NewAPIServer(":0", dbPath, "")
+	if err := server.RegisterRoutes(); err != nil {
+		t.Fatalf("failed to register routes: %v", err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatalf("failed to start API server: %v", err)
+	}
+	defer server.Stop(context.Background())
+
+	// 1. Create dummy files
+	_ = os.MkdirAll("data/jsonl", 0755)
+	_ = os.MkdirAll("data/csv/test_csv", 0755)
+	_ = os.MkdirAll("data/db", 0755)
+	_ = os.MkdirAll("data/sql", 0755)
+
+	dummyJSONL := "data/jsonl/collected_papers.jsonl"
+	_ = os.WriteFile(dummyJSONL, []byte("{\"id\":\"https://openalex.org/W1\"}\n"), 0644)
+	dummyCSV := "data/csv/test_csv/papers.csv"
+	_ = os.WriteFile(dummyCSV, []byte("id,title\nW1,Test Title\n"), 0644)
+	dummyDB := "data/db/papers.duckdb"
+	_ = os.WriteFile(dummyDB, []byte("duckdb binary dummy"), 0644)
+	dummySQLite := "data/db/papers.db"
+	_ = os.WriteFile(dummySQLite, []byte("SQLite format 3\000dummy data"), 0644)
+	dummySQL := "data/sql/papers_dump.sql"
+	_ = os.WriteFile(dummySQL, []byte("-- SQL Dump\n"), 0644)
+
+	// 2. Test GET /api/export/files
+	req := httptest.NewRequest("GET", "/api/export/files", nil)
+	w := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/files, got %d", w.Code)
+	}
+	var filesResp ExportFilesResponse
+	if err := json.NewDecoder(w.Body).Decode(&filesResp); err != nil {
+		t.Fatalf("failed to decode export files response: %v", err)
+	}
+	if len(filesResp.JSONLFiles) == 0 {
+		t.Errorf("expected at least 1 jsonl file in list")
+	}
+	if len(filesResp.CSVFolders) == 0 {
+		t.Errorf("expected at least 1 csv folder in list")
+	}
+	if len(filesResp.DuckDBFiles) == 0 {
+		t.Errorf("expected at least 1 duckdb file in list")
+	}
+	if len(filesResp.SQLiteFiles) == 0 {
+		t.Errorf("expected at least 1 sqlite file in list")
+	}
+	if len(filesResp.SQLFiles) == 0 {
+		t.Errorf("expected at least 1 sql file in list")
+	}
+
+	// 3. Test GET /api/export/status
+	statusReq := httptest.NewRequest("GET", "/api/export/status", nil)
+	statusW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(statusW, statusReq)
+	if statusW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/status, got %d", statusW.Code)
+	}
+	var statusResp ExportStatus
+	if err := json.NewDecoder(statusW.Body).Decode(&statusResp); err != nil {
+		t.Fatalf("failed to decode export status response: %v", err)
+	}
+	if statusResp.Running {
+		t.Errorf("expected Running to be false initially")
+	}
+
+	// 4. Test POST /api/export/cancel when not running
+	cancelReq := httptest.NewRequest("POST", "/api/export/cancel", nil)
+	cancelW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(cancelW, cancelReq)
+	if cancelW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/cancel, got %d", cancelW.Code)
+	}
+
+	// 5. Test POST /api/export/run with invalid mode
+	badRunBody := bytes.NewBufferString(`{"mode":"invalid-mode"}`)
+	badRunReq := httptest.NewRequest("POST", "/api/export/run", badRunBody)
+	badRunW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(badRunW, badRunReq)
+	if badRunW.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 from /api/export/run for invalid mode, got %d", badRunW.Code)
+	}
+
+	// 6. Test GET /api/export/download for csv file
+	dlReq := httptest.NewRequest("GET", "/api/export/download?type=csv&folder=test_csv&file=papers.csv", nil)
+	dlW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(dlW, dlReq)
+	if dlW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download csv, got %d", dlW.Code)
+	}
+	if !strings.Contains(dlW.Body.String(), "Test Title") {
+		t.Errorf("expected CSV content to contain 'Test Title'")
+	}
+
+	// 7. Test GET /api/export/download for csv_zip
+	zipReq := httptest.NewRequest("GET", "/api/export/download?type=csv_zip&folder=test_csv", nil)
+	zipW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(zipW, zipReq)
+	if zipW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download csv_zip, got %d", zipW.Code)
+	}
+	if zipW.Header().Get("Content-Type") != "application/zip" {
+		t.Errorf("expected Content-Type application/zip, got %s", zipW.Header().Get("Content-Type"))
+	}
+
+	// 8. Test GET /api/export/download for sqlite (.db)
+	sqliteReq := httptest.NewRequest("GET", "/api/export/download?type=sqlite&file=papers.db", nil)
+	sqliteW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(sqliteW, sqliteReq)
+	if sqliteW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download sqlite, got %d", sqliteW.Code)
+	}
+	if sqliteW.Header().Get("Content-Type") != "application/x-sqlite3" {
+		t.Errorf("expected Content-Type application/x-sqlite3, got %s", sqliteW.Header().Get("Content-Type"))
+	}
+
+	// 9. Test GET /api/export/check-db for non-existent file
+	checkNotFoundReq := httptest.NewRequest("GET", "/api/export/check-db?project=nonexistent_project_12345", nil)
+	checkNotFoundW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(checkNotFoundW, checkNotFoundReq)
+	if checkNotFoundW.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 from /api/export/check-db for missing project, got %d", checkNotFoundW.Code)
+	}
+
+	// 10. Test GET /api/export/check-db with actual duckdb file
+	sampleDuckDB := "/home/krishnakumar/StratumProjects/projects/6G/data/db/6G.duckdb"
+	if _, err := os.Stat(sampleDuckDB); err == nil {
+		checkReq := httptest.NewRequest("GET", "/api/export/check-db?project=6G&file="+url.QueryEscape(sampleDuckDB), nil)
+		checkW := httptest.NewRecorder()
+		server.server.Handler.ServeHTTP(checkW, checkReq)
+		if checkW.Code != http.StatusOK {
+			t.Fatalf("expected 200 from /api/export/check-db, got %d: %s", checkW.Code, checkW.Body.String())
+		}
+		var checkRes map[string]interface{}
+		if err := json.NewDecoder(checkW.Body).Decode(&checkRes); err != nil {
+			t.Fatalf("failed to decode check-db response: %v", err)
+		}
+		if checkRes["total"] == nil {
+			t.Errorf("expected total papers in check-db response")
+		}
+	}
+}
+
+
 
 
 

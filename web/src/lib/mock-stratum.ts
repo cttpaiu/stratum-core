@@ -216,19 +216,55 @@ export const mockSchemas: TableSchema[] = [
   },
 ]
 
-// 5. Default Mock SQL Queries
 export const mockQueries = [
   {
-    label: 'Publication Year Distribution',
-    sql: `SELECT publication_year,\n       COUNT(*) as total_papers,\n       SUM(CASE WHEN is_oa = TRUE THEN 1 ELSE 0 END) as open_access\nFROM papers\nGROUP BY publication_year\nORDER BY publication_year DESC;`,
+    label: 'Show Tables in Database',
+    sql: `SHOW TABLES;`,
   },
   {
-    label: 'Top 10 Affiliated Countries',
-    sql: `SELECT country_code,\n       COUNT(*) as contribution_count\nFROM contributions\nWHERE country_code IS NOT NULL\nGROUP BY country_code\nORDER BY contribution_count DESC\nLIMIT 10;`,
+    label: 'Table Row Counts Summary',
+    sql: `SELECT 'papers' AS table_name, count(*) AS count FROM papers
+UNION ALL
+SELECT 'authors', count(*) FROM authors
+UNION ALL
+SELECT 'institutions', count(*) FROM institutions
+UNION ALL
+SELECT 'contributions', count(*) FROM contributions
+UNION ALL
+SELECT 'countries', count(*) FROM countries;`,
+  },
+  {
+    label: 'Publication Year Distribution (papers)',
+    sql: `SELECT publication_year,
+       COUNT(*) as total_papers,
+       SUM(CASE WHEN is_oa = TRUE THEN 1 ELSE 0 END) as open_access
+FROM papers
+GROUP BY publication_year
+ORDER BY publication_year DESC;`,
+  },
+  {
+    label: 'Top 10 Affiliated Countries (contributions)',
+    sql: `SELECT country_code,
+       COUNT(*) as contribution_count
+FROM contributions
+WHERE country_code IS NOT NULL
+GROUP BY country_code
+ORDER BY contribution_count DESC
+LIMIT 10;`,
+  },
+  {
+    label: 'Query Downloaded JSONL Directly',
+    sql: `SELECT id, title, publication_year, cited_by_count
+FROM read_json_auto('data/jsonl/*.jsonl')
+LIMIT 10;`,
   },
   {
     label: 'List Synthetic Imputed Institutions',
-    sql: `SELECT id, display_name, country_code, type\nFROM institutions\nWHERE is_synthetic = TRUE\nORDER BY display_name ASC\nLIMIT 5;`,
+    sql: `SELECT id, display_name, country_code, type
+FROM institutions
+WHERE is_synthetic = TRUE
+ORDER BY display_name ASC
+LIMIT 5;`,
   },
 ]
 

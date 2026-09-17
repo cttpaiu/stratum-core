@@ -72,10 +72,12 @@ func GenerateNGrams(tokens []string, ngramMin, ngramMax int) []string {
 	return ngrams
 }
 
-// ScoredTerm represents a term and its computed mean TF-IDF score.
+// ScoredTerm represents a term and its computed mean TF-IDF and/or KeyBERT score.
 type ScoredTerm struct {
-	Term  string  `json:"term"`
-	Score float64 `json:"score"`
+	Term         string  `json:"term"`
+	Score        float64 `json:"score"`
+	TFIDFScore   float64 `json:"tfidf_score,omitempty"`
+	KeyBERTScore float64 `json:"keybert_score,omitempty"`
 }
 
 // ExtractKeywords processes a list of documents and returns the top terms scored by TF-IDF.
@@ -165,8 +167,9 @@ func ExtractKeywords(docs []string, ngramMin, ngramMax int, minDF int, maxDF flo
 	var results []ScoredTerm
 	for term, sum := range meanScores {
 		results = append(results, ScoredTerm{
-			Term:  term,
-			Score: sum / float64(numDocs),
+			Term:       term,
+			Score:      sum / float64(numDocs),
+			TFIDFScore: sum / float64(numDocs),
 		})
 	}
 

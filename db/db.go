@@ -548,7 +548,7 @@ func (m *DBManager) RunQuery(query string) ([]map[string]interface{}, error) {
 		return nil, err
 	}
 
-	var result []map[string]interface{}
+	result := make([]map[string]interface{}, 0)
 
 	for rows.Next() {
 		values := make([]interface{}, len(cols))
