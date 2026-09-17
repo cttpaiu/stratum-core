@@ -1067,6 +1067,9 @@ func (s *APIServer) handleConfig(w http.ResponseWriter, r *http.Request) {
 		// Append revision to history in DB
 		_ = s.appendConfigRevision(configDB, payload.Keywords, payload.Topics, payload.Anchors, payload.Label)
 
+		// Sync physical keywords.txt and topics.txt to disk
+		s.exportProjectMetadataFiles(project)
+
 		w.Write([]byte(`{"status": "success"}`))
 		return
 	}
@@ -3088,9 +3091,10 @@ func (s *APIServer) handleExportRun(w http.ResponseWriter, r *http.Request) {
 			if (mode == "pipeline" && reqBody.CreateSQL) || mode == "csv-to-sql" {
 				status.OutputFiles = append(status.OutputFiles, sqlName)
 			}
+			s.exportProjectMetadataFiles(project)
 			status.CompletedAt = time.Now().Format("2006-01-02 15:04:05")
 			s.mu.Unlock()
-			s.addExportLog(project, fmt.Sprintf("[%s] [SUCCESS] Export completed successfully!", time.Now().Format("15:04:05")))
+			s.addExportLog(project, fmt.Sprintf("[%s] [SUCCESS] Export completed successfully! Synced keywords.txt and topics.txt to data directory.", time.Now().Format("15:04:05")))
 		}
 	}()
 
@@ -3101,6 +3105,112 @@ func (s *APIServer) handleExportRun(w http.ResponseWriter, r *http.Request) {
 		"duckdb":     duckdbName,
 		"sql":        sqlName,
 	})
+}
+
+// getProjectKeywordsAndTopics resolves active search keywords query and OpenAlex topic IDs.
+func (s *APIServer) getProjectKeywordsAndTopics(project string) (string, string) {
+	var keywords, topics string
+
+	configDBPath, _, _, _, _ := s.getProjectPaths(project)
+	cfg, err := config.LoadConfig(configDBPath)
+	if err == nil && cfg != nil {
+		keywords = strings.TrimSpace(cfg.Keywords)
+		if len(cfg.Topics) > 0 {
+			topics = strings.TrimSpace(strings.Join(cfg.Topics, "\n"))
+		}
+	}
+
+	projBaseDir, _, _, dbBaseDir, _ := s.getProjectExportDirs(project)
+
+	if keywords == "" {
+		candidates := []string{
+			filepath.Join(dbBaseDir, "keywords.txt"),
+			filepath.Join(projBaseDir, "data", "keywords.txt"),
+			filepath.Join(projBaseDir, "config", "keywords.txt"),
+			filepath.Join("config", "keywords.txt"),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s_keywords.txt", project),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s_publications_keywords.txt", project),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s Keywords .txt", project),
+			"/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/keywords.txt",
+		}
+		for _, p := range candidates {
+			if b, err := os.ReadFile(p); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+				keywords = strings.TrimSpace(string(b))
+				break
+			}
+		}
+	}
+
+	if topics == "" {
+		candidates := []string{
+			filepath.Join(dbBaseDir, "topics.txt"),
+			filepath.Join(projBaseDir, "data", "topics.txt"),
+			filepath.Join(projBaseDir, "config", "topics.txt"),
+			filepath.Join("config", "topics.txt"),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s_topics.txt", project),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s_publications_topics.txt", project),
+			fmt.Sprintf("/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/%s topics.txt", project),
+			"/run/media/krishnakumar/New Volume/IISC/openAlex_data_collection/config/topics.txt",
+		}
+		for _, p := range candidates {
+			if b, err := os.ReadFile(p); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+				topics = strings.TrimSpace(string(b))
+				break
+			}
+		}
+	}
+
+	return keywords, topics
+}
+
+// exportProjectMetadataFiles writes current keywords.txt and topics.txt to the project data/db folders.
+func (s *APIServer) exportProjectMetadataFiles(project string) {
+	keywords, topics := s.getProjectKeywordsAndTopics(project)
+	projBaseDir, _, _, dbBaseDir, _ := s.getProjectExportDirs(project)
+	_ = os.MkdirAll(dbBaseDir, 0755)
+	_ = os.MkdirAll(filepath.Join(projBaseDir, "data"), 0755)
+
+	if keywords != "" {
+		_ = os.WriteFile(filepath.Join(dbBaseDir, "keywords.txt"), []byte(keywords+"\n"), 0644)
+		_ = os.WriteFile(filepath.Join(projBaseDir, "data", "keywords.txt"), []byte(keywords+"\n"), 0644)
+	}
+	if topics != "" {
+		_ = os.WriteFile(filepath.Join(dbBaseDir, "topics.txt"), []byte(topics+"\n"), 0644)
+		_ = os.WriteFile(filepath.Join(projBaseDir, "data", "topics.txt"), []byte(topics+"\n"), 0644)
+	}
+}
+
+// serveDuckDBBundleZip generates a ZIP archive with DuckDB database plus keywords.txt and topics.txt.
+func (s *APIServer) serveDuckDBBundleZip(w http.ResponseWriter, r *http.Request, target, fileName, project string) {
+	baseName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	zipName := fmt.Sprintf("%s_with_metadata.zip", baseName)
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+
+	// 1. Add DuckDB file
+	f, err := os.Open(target)
+	if err == nil {
+		wDb, errZip := zipWriter.Create(fileName)
+		if errZip == nil {
+			_, _ = io.Copy(wDb, f)
+		}
+		f.Close()
+	}
+
+	// 2. Add keywords.txt
+	keywords, topics := s.getProjectKeywordsAndTopics(project)
+	if kwWriter, err := zipWriter.Create("keywords.txt"); err == nil {
+		_, _ = kwWriter.Write([]byte(keywords + "\n"))
+	}
+
+	// 3. Add topics.txt
+	if topWriter, err := zipWriter.Create("topics.txt"); err == nil {
+		_, _ = topWriter.Write([]byte(topics + "\n"))
+	}
 }
 
 // handleExportDownload serves individual CSVs, DuckDB, SQL, JSONL files, or CSV folder as ZIP.
@@ -3122,6 +3232,20 @@ func (s *APIServer) handleExportDownload(w http.ResponseWriter, r *http.Request)
 	fileName := filepath.Base(r.URL.Query().Get("file"))
 
 	switch downloadType {
+	case "keywords":
+		keywords, _ := s.getProjectKeywordsAndTopics(project)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="keywords.txt"`)
+		w.Write([]byte(keywords + "\n"))
+		return
+
+	case "topics":
+		_, topics := s.getProjectKeywordsAndTopics(project)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="topics.txt"`)
+		w.Write([]byte(topics + "\n"))
+		return
+
 	case "csv_zip":
 		if folder == "" || folder == "." {
 			folder = "openalex_csv"
@@ -3191,6 +3315,7 @@ func (s *APIServer) handleExportDownload(w http.ResponseWriter, r *http.Request)
 		return
 
 	case "duckdb":
+		includeBundle := r.URL.Query().Get("bundle") == "true" || r.URL.Query().Get("with_meta") == "true"
 		target := filepath.Join(dbBaseDir, fileName)
 		if fi, err := os.Stat(target); err != nil || fi.IsDir() {
 			altTarget := filepath.Join(projBaseDir, "data", fileName)
@@ -3201,9 +3326,29 @@ func (s *APIServer) handleExportDownload(w http.ResponseWriter, r *http.Request)
 				return
 			}
 		}
+
+		if includeBundle {
+			s.serveDuckDBBundleZip(w, r, target, fileName, project)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
 		http.ServeFile(w, r, target)
+		return
+
+	case "duckdb_bundle":
+		target := filepath.Join(dbBaseDir, fileName)
+		if fi, err := os.Stat(target); err != nil || fi.IsDir() {
+			altTarget := filepath.Join(projBaseDir, "data", fileName)
+			if fi2, err2 := os.Stat(altTarget); err2 == nil && !fi2.IsDir() {
+				target = altTarget
+			} else {
+				http.Error(w, "DuckDB file not found", http.StatusNotFound)
+				return
+			}
+		}
+		s.serveDuckDBBundleZip(w, r, target, fileName, project)
 		return
 
 	case "sql":

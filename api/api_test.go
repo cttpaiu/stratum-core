@@ -1314,6 +1314,39 @@ func TestExportRoutes(t *testing.T) {
 		t.Errorf("expected Content-Type application/x-sqlite3, got %s", sqliteW.Header().Get("Content-Type"))
 	}
 
+	// 8b. Test GET /api/export/download for keywords
+	kwReq := httptest.NewRequest("GET", "/api/export/download?type=keywords", nil)
+	kwW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(kwW, kwReq)
+	if kwW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download keywords, got %d", kwW.Code)
+	}
+	if !strings.Contains(kwW.Header().Get("Content-Disposition"), "keywords.txt") {
+		t.Errorf("expected Content-Disposition for keywords.txt, got %s", kwW.Header().Get("Content-Disposition"))
+	}
+
+	// 8c. Test GET /api/export/download for topics
+	topReq := httptest.NewRequest("GET", "/api/export/download?type=topics", nil)
+	topW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(topW, topReq)
+	if topW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download topics, got %d", topW.Code)
+	}
+	if !strings.Contains(topW.Header().Get("Content-Disposition"), "topics.txt") {
+		t.Errorf("expected Content-Disposition for topics.txt, got %s", topW.Header().Get("Content-Disposition"))
+	}
+
+	// 8d. Test GET /api/export/download for duckdb_bundle
+	bundleReq := httptest.NewRequest("GET", "/api/export/download?type=duckdb_bundle&file=papers.db", nil)
+	bundleW := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(bundleW, bundleReq)
+	if bundleW.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/export/download duckdb_bundle, got %d", bundleW.Code)
+	}
+	if bundleW.Header().Get("Content-Type") != "application/zip" {
+		t.Errorf("expected Content-Type application/zip for bundle, got %s", bundleW.Header().Get("Content-Type"))
+	}
+
 	// 9. Test GET /api/export/check-db for non-existent file
 	checkNotFoundReq := httptest.NewRequest("GET", "/api/export/check-db?project=nonexistent_project_12345", nil)
 	checkNotFoundW := httptest.NewRecorder()
