@@ -12,17 +12,13 @@ import {
   CheckCircle2,
   Building2,
   Globe,
-  Activity,
   ArrowLeft,
   FileCode,
   HardDrive,
   Info,
   Search,
   Award,
-  BookOpen,
   FolderOpen,
-  TrendingUp,
-  Sparkles,
 } from 'lucide-react'
 import { useProject } from '../context/ProjectContext'
 import { generateDatabaseHealthPDF } from '../lib/pdf-report'
@@ -121,7 +117,6 @@ export function CheckDB() {
   const [result, setResult] = useState<CheckDBData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'visual' | 'json'>('visual')
-  const [partialTab, setPartialTab] = useState<'institution' | 'country'>('institution')
   const [copiedJson, setCopiedJson] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
 

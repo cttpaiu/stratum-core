@@ -408,11 +408,70 @@ export function Export() {
   }
 
   // Download Trigger Helpers
-  const triggerDownload = (type: string, folder?: string, file?: string) => {
+  const triggerDownload = async (type: string, folder?: string, file?: string) => {
+    // 1. Dedicated text download handling for keywords and topics
+    if (type === 'keywords' || type === 'topics') {
+      try {
+        let text = ''
+        // Try dedicated download endpoint first
+        const dlUrl = `/api/export/download?project=${encodeURIComponent(activeProject)}&type=${encodeURIComponent(type)}`
+        try {
+          const res = await fetch(dlUrl)
+          if (res.ok) {
+            text = await res.text()
+          }
+        } catch {
+          // fallback to /api/config
+        }
+
+        // Fallback: fetch directly from /api/config if export download endpoint returned error
+        if (!text) {
+          const cfgRes = await fetch(`/api/config?project=${encodeURIComponent(activeProject)}`)
+          if (cfgRes.ok) {
+            const cfgData = await cfgRes.json()
+            if (type === 'keywords') {
+              text = cfgData.keywords || (cfgData.config && cfgData.config.keywords) || ''
+            } else if (type === 'topics') {
+              text = cfgData.topics || (cfgData.config && Array.isArray(cfgData.config.topics) ? cfgData.config.topics.join('\n') : '') || ''
+            }
+          }
+        }
+
+        if (!text) {
+          text = type === 'keywords' ? '# No keywords configured for this project\n' : '# No topic IDs configured for this project\n'
+        }
+
+        const blob = new Blob([text.endsWith('\n') ? text : text + '\n'], { type: 'text/plain;charset=utf-8;' })
+        const blobUrl = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = blobUrl
+        link.setAttribute('download', file || `${type}.txt`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(blobUrl)
+
+        addToast('success', 'Download Started', `${file || `${type}.txt`} saved successfully.`)
+        return
+      } catch (err) {
+        console.error('Failed to download text file:', err)
+        addToast('error', 'Download Failed', `Could not download ${type}.txt: ${err instanceof Error ? err.message : String(err)}`)
+        return
+      }
+    }
+
+    // 2. Binary / database downloads
     let url = `/api/export/download?project=${encodeURIComponent(activeProject)}&type=${encodeURIComponent(type)}`
     if (folder) url += `&folder=${encodeURIComponent(folder)}`
     if (file) url += `&file=${encodeURIComponent(file)}`
-    window.open(url, '_blank')
+
+    // Use invisible anchor tag for smooth download without popup blocking
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', file || `${type}.txt`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleCopyLogs = () => {
@@ -980,6 +1039,7 @@ export function Export() {
                         <Download className="h-3 w-3 text-zinc-400 group-hover:text-amber-600 transition" />
                       </div>
                     </button>
+
                     <Link
                       to="/check-db"
                       search={{ file: latestDuckDBFile.name }}
@@ -1021,6 +1081,67 @@ export function Export() {
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Keywords.txt and Topics.txt Download Buttons (Placed separately below DuckDB Last Converted and above previously converted items) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Keywords.txt Download Button */}
+              <button
+                type="button"
+                onClick={() => triggerDownload('keywords', undefined, 'keywords.txt')}
+                className="flex items-center justify-between p-3 rounded border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 hover:border-blue-400 dark:hover:border-blue-700 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-left transition cursor-pointer group shadow-xs"
+                title={`Download active search keywords query (keywords.txt) for ${activeProject}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 shrink-0">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-mono font-bold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      keywords.txt
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-900/70 text-blue-700 dark:text-blue-300 uppercase font-semibold">
+                        Query
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans truncate">
+                      Download Boolean search keywords query configured for {activeProject}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-blue-200 dark:border-blue-800 bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 text-xs font-mono font-semibold shrink-0 ml-2 group-hover:bg-blue-600 group-hover:text-white transition">
+                  <span>Download</span>
+                  <Download className="h-3.5 w-3.5" />
+                </div>
+              </button>
+
+              {/* Topics.txt Download Button */}
+              <button
+                type="button"
+                onClick={() => triggerDownload('topics', undefined, 'topics.txt')}
+                className="flex items-center justify-between p-3 rounded border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 hover:border-emerald-400 dark:hover:border-emerald-700 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-left transition cursor-pointer group shadow-xs"
+                title={`Download OpenAlex target topic IDs list (topics.txt) for ${activeProject}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 shrink-0">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-mono font-bold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      topics.txt
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-900/70 text-emerald-700 dark:text-emerald-300 uppercase font-semibold">
+                        Topics
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans truncate">
+                      Download OpenAlex target topic IDs list configured for {activeProject}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-semibold shrink-0 ml-2 group-hover:bg-emerald-600 group-hover:text-white transition">
+                  <span>Download</span>
+                  <Download className="h-3.5 w-3.5" />
+                </div>
+              </button>
             </div>
 
             {/* Optional Collapsible for Previously Converted Archives */}
@@ -1103,7 +1224,8 @@ export function Export() {
                               <button
                                 type="button"
                                 onClick={() => triggerDownload('duckdb', undefined, db.name)}
-                                className="px-2 py-1 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold uppercase cursor-pointer transition"
+                                className="px-2.5 py-1 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold uppercase cursor-pointer transition"
+                                title={`Download ${db.name}`}
                               >
                                 Download
                               </button>
