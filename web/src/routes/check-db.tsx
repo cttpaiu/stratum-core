@@ -1,10 +1,11 @@
 // src/routes/check-db.tsx
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Database,
   RefreshCw,
   Download,
+  Loader2,
   Copy,
   Check,
   AlertTriangle,
@@ -119,6 +120,9 @@ export function CheckDB() {
   const [viewMode, setViewMode] = useState<'visual' | 'json'>('visual')
   const [copiedJson, setCopiedJson] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const page1Ref = useRef<HTMLDivElement>(null)
+  const page2Ref = useRef<HTMLDivElement>(null)
 
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
     const id = Math.random().toString(36).substring(2, 9)
@@ -129,32 +133,35 @@ export function CheckDB() {
   }
 
   // Execute check-db API query
-  const runCheck = useCallback(async (targetFile?: string) => {
-    const fileToQuery = targetFile !== undefined ? targetFile : selectedDB
-    setChecking(true)
-    setError(null)
+  const runCheck = useCallback(
+    async (targetFile?: string) => {
+      const fileToQuery = targetFile !== undefined ? targetFile : selectedDB
+      setChecking(true)
+      setError(null)
 
-    try {
-      let url = `/api/export/check-db?project=${encodeURIComponent(activeProject)}`
-      if (fileToQuery) {
-        url += `&file=${encodeURIComponent(fileToQuery)}`
+      try {
+        let url = `/api/export/check-db?project=${encodeURIComponent(activeProject)}`
+        if (fileToQuery) {
+          url += `&file=${encodeURIComponent(fileToQuery)}`
+        }
+        const resp = await fetch(url)
+        const data = await resp.json()
+        if (!resp.ok || data.error) {
+          throw new Error(data.error || `HTTP ${resp.status} checking database`)
+        }
+        setResult(data)
+        if (fileToQuery && fileToQuery !== selectedDB) {
+          setSelectedDB(fileToQuery)
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to complete database completeness check')
+        addToast('error', 'Check DB Failed', err.message || 'Verification error')
+      } finally {
+        setChecking(false)
       }
-      const resp = await fetch(url)
-      const data = await resp.json()
-      if (!resp.ok || data.error) {
-        throw new Error(data.error || `HTTP ${resp.status} checking database`)
-      }
-      setResult(data)
-      if (fileToQuery && fileToQuery !== selectedDB) {
-        setSelectedDB(fileToQuery)
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to complete database completeness check')
-      addToast('error', 'Check DB Failed', err.message || 'Verification error')
-    } finally {
-      setChecking(false)
-    }
-  }, [activeProject, selectedDB])
+    },
+    [activeProject, selectedDB],
+  )
 
   // Fetch available project database files
   // Fetch available project database files & discovered external databases
@@ -210,9 +217,17 @@ export function CheckDB() {
         const urlFile = urlParams.get('file')
 
         let chosen = ''
-        if (urlFile && (items.some((it) => it.name === urlFile || it.path === urlFile) || discovered.some((d) => d.name === urlFile || d.path === urlFile))) {
+        if (
+          urlFile &&
+          (items.some((it) => it.name === urlFile || it.path === urlFile) ||
+            discovered.some((d) => d.name === urlFile || d.path === urlFile))
+        ) {
           chosen = urlFile
-        } else if (selectedDB && (items.some((it) => it.name === selectedDB || it.path === selectedDB) || discovered.some((d) => d.name === selectedDB || d.path === selectedDB))) {
+        } else if (
+          selectedDB &&
+          (items.some((it) => it.name === selectedDB || it.path === selectedDB) ||
+            discovered.some((d) => d.name === selectedDB || d.path === selectedDB))
+        ) {
           chosen = selectedDB
         } else if (items.length > 0) {
           chosen = items[0].name
@@ -240,14 +255,27 @@ export function CheckDB() {
   }, [activeProject])
 
   // Download comprehensive PDF report
-  const handleDownloadPDFReport = () => {
-    if (!result) return
+  const handleDownloadPDFReport = async () => {
+    if (!result || !page1Ref.current || !page2Ref.current || exportingPdf) return
+    setExportingPdf(true)
+    const originalViewMode = viewMode
+
     try {
-      generateDatabaseHealthPDF(result, selectedDB, activeProject)
-      addToast('success', 'PDF Report Downloaded', `Generated PDF health report for ${selectedDB}`)
+      if (viewMode !== 'visual') {
+        setViewMode('visual')
+        await new Promise((r) => setTimeout(r, 150))
+      }
+
+      await generateDatabaseHealthPDF([page1Ref.current, page2Ref.current], selectedDB, activeProject)
+      addToast('success', 'PDF Report Downloaded', `Generated 2-page landscape PDF health report for ${selectedDB}`)
     } catch (err: any) {
       console.error('Failed to generate PDF:', err)
       addToast('error', 'PDF Generation Failed', err.message || 'Error generating PDF document')
+    } finally {
+      if (originalViewMode !== 'visual') {
+        setViewMode(originalViewMode)
+      }
+      setExportingPdf(false)
     }
   }
 
@@ -272,7 +300,8 @@ export function CheckDB() {
     const d = total || 1
     const pct = (count / d) * 100
     const clamped = Math.max(0, Math.min(100, pct || 0))
-    const colorClass = clamped >= 80 ? 'bg-emerald-500' : clamped >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+    const colorClass =
+      clamped >= 80 ? 'bg-emerald-500' : clamped >= 50 ? 'bg-amber-500' : 'bg-rose-500'
     const textClass =
       clamped >= 80
         ? 'text-emerald-700 dark:text-emerald-400'
@@ -282,12 +311,15 @@ export function CheckDB() {
 
     return (
       <div className="flex items-center justify-between gap-3">
-        <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{label}</span>
+        <span className="text-zinc-600 dark:text-zinc-400 flex-1 min-w-0 leading-snug">{label}</span>
         <div
           className="w-28 sm:w-44 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden shrink-0 cursor-help"
           title={`${label}: ${renderBlockBar(clamped)} ${clamped.toFixed(1)}%`}
         >
-          <div className={`h-full ${colorClass} rounded-full transition-all duration-300`} style={{ width: `${clamped}%` }} />
+          <div
+            className={`h-full ${colorClass} rounded-full transition-all duration-300`}
+            style={{ width: `${clamped}%` }}
+          />
         </div>
         <span className={`w-32 text-right font-bold text-[11px] shrink-0 font-mono ${textClass}`}>
           {count.toLocaleString()} ({clamped.toFixed(1)}%)
@@ -297,11 +329,17 @@ export function CheckDB() {
   }
 
   // UI Helper: Coverage category progress bar row
-  const renderCoverageRow = (label: string, count: number, total: number, color: 'emerald' | 'amber' | 'rose') => {
+  const renderCoverageRow = (
+    label: string,
+    count: number,
+    total: number,
+    color: 'emerald' | 'amber' | 'rose',
+  ) => {
     const d = total || 1
     const pct = (count / d) * 100
     const clamped = Math.max(0, Math.min(100, pct || 0))
-    const colorClass = color === 'emerald' ? 'bg-emerald-500' : color === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
+    const colorClass =
+      color === 'emerald' ? 'bg-emerald-500' : color === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
     const textClass =
       color === 'emerald'
         ? 'text-emerald-700 dark:text-emerald-400'
@@ -311,12 +349,15 @@ export function CheckDB() {
 
     return (
       <div className="flex items-center justify-between gap-3">
-        <span className="text-zinc-600 dark:text-zinc-400 truncate flex-1">{label}</span>
+       <span className="text-zinc-600 dark:text-zinc-400 flex-1 min-w-0 leading-snug">{label}</span>
         <div
           className="w-24 sm:w-36 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden shrink-0 cursor-help"
           title={`${label}: ${renderBlockBar(clamped)} ${clamped.toFixed(1)}%`}
         >
-          <div className={`h-full ${colorClass} rounded-full transition-all duration-300`} style={{ width: `${clamped}%` }} />
+          <div
+            className={`h-full ${colorClass} rounded-full transition-all duration-300`}
+            style={{ width: `${clamped}%` }}
+          />
         </div>
         <span className={`w-32 text-right font-bold text-[11px] shrink-0 font-mono ${textClass}`}>
           {count.toLocaleString()} ({clamped.toFixed(1)}%)
@@ -328,7 +369,7 @@ export function CheckDB() {
   return (
     <div className="flex flex-col gap-6 pb-16 w-full max-w-7xl mx-auto font-sans">
       {/* Toast Notification Stack */}
-      <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full">
+      <div data-html2canvas-ignore="true" className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full">
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -340,11 +381,17 @@ export function CheckDB() {
                   : 'bg-zinc-50/95 dark:bg-zinc-900/90 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'
             }`}
           >
-            {toast.type === 'success' && <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />}
-            {toast.type === 'error' && <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />}
+            {toast.type === 'success' && (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            )}
+            {toast.type === 'error' && (
+              <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            )}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="font-mono font-bold">{toast.title}</span>
-              <span className="text-zinc-600 dark:text-zinc-300 text-[11px] break-words">{toast.message}</span>
+              <span className="text-zinc-600 dark:text-zinc-300 text-[11px] break-words">
+                {toast.message}
+              </span>
             </div>
           </div>
         ))}
@@ -352,105 +399,112 @@ export function CheckDB() {
 
       {/* Top Header with Breadcrumbs & Action Toolbar */}
       <div className="flex flex-col gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5 pt-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <Link
-                to="/export"
-                className="inline-flex items-center gap-1 text-xs font-mono text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"
-                title="Return to Download & Export"
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col gap-1.5">
+              <div data-html2canvas-ignore="true" className="flex items-center gap-2">
+                <Link
+                  to="/export"
+                  className="inline-flex items-center gap-1 text-xs font-mono text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"
+                  title="Return to Download & Export"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Download &amp; Export</span>
+                </Link>
+                <span className="text-zinc-300 dark:text-zinc-700">/</span>
+                <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                  Check DB Health
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-mono font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-2.5">
+                  <Database className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  Database Health
+                </h1>
+                {selectedDB && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    {selectedDB}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans max-w-3xl">
+                Relational completeness, entity normalization (ORCID, ROR), country/institution
+                attribution breakdown, and bibliometric reach.
+              </p>
+            </div>
+
+            {/* Global Action Toolbar */}
+            <div data-html2canvas-ignore="true" className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* View Mode Switcher */}
+              <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-0.5 text-xs font-mono shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('visual')}
+                  className={`px-3 py-1 rounded transition cursor-pointer flex items-center gap-1.5 ${
+                    viewMode === 'visual'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('json')}
+                  className={`px-3 py-1 rounded transition cursor-pointer flex items-center gap-1.5 ${
+                    viewMode === 'json'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <FileCode className="h-3.5 w-3.5" />
+                  <span>Raw JSON</span>
+                </button>
+              </div>
+
+              {/* Export Actions */}
+              {result && (
+                <button
+                  type="button"
+                  onClick={handleDownloadPDFReport}
+                  disabled={exportingPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 transition cursor-pointer shadow-xs disabled:opacity-50"
+                  title="Download comprehensive PDF health report"
+                >
+                  {exportingPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  )}
+                  <span>{exportingPdf ? 'Exporting...' : 'PDF Report'}</span>
+                </button>
+              )}
+
+              {/* Re-run Button */}
+              <button
+                type="button"
+                onClick={() => runCheck()}
+                disabled={checking}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer shadow-xs disabled:opacity-50"
+                title="Re-execute completeness verification queries"
               >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Download &amp; Export</span>
-              </Link>
-              <span className="text-zinc-300 dark:text-zinc-700">/</span>
-              <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                Check DB Health
-              </span>
+                <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
+                <span>{checking ? 'Checking...' : 'Re-run'}</span>
+              </button>
             </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-mono font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-2.5">
-                <Database className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                Database Health &amp; Completeness
-              </h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                openalex check-db
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-zinc-100 dark:bg-zinc-850 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
-                Project: {activeProject}
-              </span>
-            </div>
-
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans max-w-3xl">
-              Relational completeness, entity normalization (ORCID, ROR), country/institution attribution breakdown, and bibliometric reach replicated directly from OpenAlex CLI.
-            </p>
           </div>
 
-          {/* Global Action Toolbar */}
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {/* View Mode Switcher */}
-            <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-0.5 text-xs font-mono shadow-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode('visual')}
-                className={`px-3 py-1 rounded transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'visual'
-                    ? 'bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100 shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                }`}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                <span>Dashboard</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('json')}
-                className={`px-3 py-1 rounded transition cursor-pointer flex items-center gap-1.5 ${
-                  viewMode === 'json'
-                    ? 'bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100 shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                }`}
-              >
-                <FileCode className="h-3.5 w-3.5" />
-                <span>Raw JSON</span>
-              </button>
-            </div>
-
-            {/* Export Actions */}
-            {result && (
-              <button
-                type="button"
-                onClick={handleDownloadPDFReport}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 transition cursor-pointer shadow-xs"
-                title="Download comprehensive PDF health report"
-              >
-                <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>PDF Report</span>
-              </button>
-            )}
-
-            {/* Re-run Button */}
-            <button
-              type="button"
-              onClick={() => runCheck()}
-              disabled={checking}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer shadow-xs disabled:opacity-50"
-              title="Re-execute completeness verification queries"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
-              <span>{checking ? 'Checking...' : 'Re-run'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Database Selection Bar (Dropdown + Custom Path input) */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
+          {/* Database Selection Bar (Dropdown + Custom Path input) */}
+          <div data-html2canvas-ignore="true" className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Target DB Selector */}
             <div className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 shadow-xs">
               <HardDrive className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <span className="text-[10px] font-mono font-bold uppercase text-zinc-400">Database:</span>
+              <span className="text-[10px] font-mono font-bold uppercase text-zinc-400">
+                Database:
+              </span>
               <select
                 value={selectedDB}
                 onChange={(e) => {
@@ -481,7 +535,9 @@ export function CheckDB() {
                   </optgroup>
                 )}
                 {dbFiles.length === 0 && discoveredDBs.length === 0 && (
-                  <option value="">{loadingFiles ? 'Scanning databases...' : 'No databases detected'}</option>
+                  <option value="">
+                    {loadingFiles ? 'Scanning databases...' : 'No databases detected'}
+                  </option>
                 )}
               </select>
             </div>
@@ -530,7 +586,7 @@ export function CheckDB() {
                     runCheck(d.path)
                   }}
                   className={`px-2 py-0.5 rounded-md text-[10px] border transition cursor-pointer shrink-0 truncate max-w-[150px] ${
-                    (selectedDB === d.path || result?.db_path === d.path)
+                    selectedDB === d.path || result?.db_path === d.path
                       ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
                       : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
                   }`}
@@ -553,7 +609,8 @@ export function CheckDB() {
               Running Database Verification
             </span>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans leading-relaxed">
-              Evaluating relational completeness, scanning paper-author junction tables, and computing institution/country attribution percentages...
+              Evaluating relational completeness, scanning paper-author junction tables, and
+              computing institution/country attribution percentages...
             </p>
           </div>
         </div>
@@ -600,7 +657,12 @@ export function CheckDB() {
               No Databases Found in Active Project
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans leading-relaxed">
-              Project <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">"{activeProject}"</span> has no DuckDB or SQLite database generated yet. Ingest OpenAlex records and convert them to DuckDB in the Download &amp; Export page first.
+              Project{' '}
+              <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                "{activeProject}"
+              </span>{' '}
+              has no DuckDB or SQLite database generated yet. Ingest OpenAlex records and convert
+              them to DuckDB in the Download &amp; Export page first.
             </p>
           </div>
           <Link
@@ -629,7 +691,11 @@ export function CheckDB() {
                   onClick={handleCopyJson}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer shadow-xs"
                 >
-                  {copiedJson ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedJson ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
                   <span>{copiedJson ? 'Copied JSON' : 'Copy JSON'}</span>
                 </button>
               </div>
@@ -640,15 +706,40 @@ export function CheckDB() {
           ) : (
             /* Visual Dashboard View */
             <div className="flex flex-col gap-8">
-              {/* 1. Database Overview KPI Cards */}
-              <div className="flex flex-col gap-3">
+              {/* Page 1 (Landscape PDF): Database Health Overview & Data Completeness */}
+              <div ref={page1Ref} className="flex flex-col gap-6 bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+                {/* Page 1 Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Database className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <h2 className="text-base sm:text-lg font-mono font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                        Database Health &amp; Completeness
+                      </h2>
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans block">
+                        Relational completeness, entity normalization (ORCID, ROR), and bibliometric quality audit
+                      </span>
+                    </div>
+                  </div>
+                  {selectedDB && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      {selectedDB}
+                    </span>
+                  )}
+                </div>
+
+                {/* 1. Database Overview KPI Cards */}
+                <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
                     <Layers className="h-4 w-4 text-zinc-500" />
                     Database Relational Overview
                   </span>
                   {result.db_path && (
-                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 truncate max-w-lg" title={result.db_path}>
+                    <span
+                      className="text-xs font-mono text-zinc-500 dark:text-zinc-400 break-all max-w-lg text-right"
+                      title={result.db_path}
+                    >
                       Path: {result.db_path}
                     </span>
                   )}
@@ -657,7 +748,9 @@ export function CheckDB() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
                   {/* Papers */}
                   <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1.5 shadow-xs">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Papers</span>
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Papers
+                    </span>
                     <span className="text-2xl font-mono font-bold text-zinc-900 dark:text-zinc-50">
                       {result.total.toLocaleString()}
                     </span>
@@ -668,29 +761,39 @@ export function CheckDB() {
 
                   {/* Authors */}
                   <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1.5 shadow-xs">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Authors</span>
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Authors
+                    </span>
                     <span className="text-2xl font-mono font-bold text-zinc-900 dark:text-zinc-50">
                       {result.author_count.toLocaleString()}
                     </span>
                     <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      {result.authors_with_orcid.toLocaleString()} with ORCID ({((result.authors_with_orcid / (result.author_count || 1)) * 100).toFixed(1)}%)
+                      {result.authors_with_orcid.toLocaleString()} with ORCID (
+                      {((result.authors_with_orcid / (result.author_count || 1)) * 100).toFixed(1)}
+                      %)
                     </span>
                   </div>
 
                   {/* Institutions */}
                   <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1.5 shadow-xs">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Institutions</span>
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Institutions
+                    </span>
                     <span className="text-2xl font-mono font-bold text-zinc-900 dark:text-zinc-50">
                       {result.inst_count.toLocaleString()}
                     </span>
                     <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400 font-semibold">
-                      {result.institutions_with_ror.toLocaleString()} with ROR ({((result.institutions_with_ror / (result.inst_count || 1)) * 100).toFixed(1)}%)
+                      {result.institutions_with_ror.toLocaleString()} with ROR (
+                      {((result.institutions_with_ror / (result.inst_count || 1)) * 100).toFixed(1)}
+                      %)
                     </span>
                   </div>
 
                   {/* Countries */}
                   <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1.5 shadow-xs">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Countries</span>
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Countries
+                    </span>
                     <span className="text-2xl font-mono font-bold text-zinc-900 dark:text-zinc-50">
                       {result.country_count.toLocaleString()}
                     </span>
@@ -699,11 +802,15 @@ export function CheckDB() {
 
                   {/* Contributions */}
                   <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1.5 shadow-xs">
-                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Contributions</span>
+                    <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">
+                      Contributions
+                    </span>
                     <span className="text-2xl font-mono font-bold text-zinc-900 dark:text-zinc-50">
                       {result.contrib_count.toLocaleString()}
                     </span>
-                    <span className="text-[11px] font-mono text-zinc-500">Junction table links</span>
+                    <span className="text-[11px] font-mono text-zinc-500">
+                      Junction table links
+                    </span>
                   </div>
                 </div>
               </div>
@@ -716,7 +823,8 @@ export function CheckDB() {
                     Data Completeness
                   </span>
                   <span className="text-[11px] font-mono text-zinc-400">
-                    Health benchmarks: <span className="text-emerald-600 font-bold">≥80% Optimal</span> ·{' '}
+                    Health benchmarks:{' '}
+                    <span className="text-emerald-600 font-bold">≥80% Optimal</span> ·{' '}
                     <span className="text-amber-500 font-bold">50–79% Moderate</span> ·{' '}
                     <span className="text-rose-500 font-bold">&lt;50% Sparse</span>
                   </span>
@@ -730,9 +838,21 @@ export function CheckDB() {
                         Papers Table
                       </span>
                       <div className="flex flex-col gap-3 text-xs font-mono">
-                        {renderCompletenessRow('Abstract Text Present', result.with_abstract, result.total)}
-                        {renderCompletenessRow('Country Info Assigned', result.with_country, result.total)}
-                        {renderCompletenessRow('Institution Info Assigned', result.with_institution, result.total)}
+                        {renderCompletenessRow(
+                          'Abstract Text Present',
+                          result.with_abstract,
+                          result.total,
+                        )}
+                        {renderCompletenessRow(
+                          'Country Info Assigned',
+                          result.with_country,
+                          result.total,
+                        )}
+                        {renderCompletenessRow(
+                          'Institution Info Assigned',
+                          result.with_institution,
+                          result.total,
+                        )}
                       </div>
                     </div>
 
@@ -740,10 +860,14 @@ export function CheckDB() {
                       <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 border-b border-zinc-100 dark:border-zinc-800/80 pb-1">
                         Authors Table
                       </span>
-                      
+
                       <div className="flex flex-col gap-3 text-xs font-mono">
-                        {renderCompletenessRow('Authors with ORCID', result.authors_with_orcid, result.author_count)}
-                        {renderCompletenessRow('Institutions with ROR', result.institutions_with_ror, result.inst_count)}
+                        {renderCompletenessRow(
+                          'Authors with ORCID',
+                          result.authors_with_orcid,
+                          result.author_count,
+                        )}
+                        
                       </div>
                     </div>
                   </div>
@@ -755,36 +879,78 @@ export function CheckDB() {
                         Contributions Junction Table
                       </span>
                       <div className="flex flex-col gap-3 text-xs font-mono">
-                        {renderCompletenessRow('Rows with Resolved Country', result.contrib_with_country, result.contrib_count)}
-                        {renderCompletenessRow('Rows with Resolved Institution', result.contrib_with_institution, result.contrib_count)}
-                        {renderCompletenessRow('Rows with Raw Affiliation String', result.contrib_with_raw_affiliation, result.contrib_count)}
+                        {renderCompletenessRow(
+                          'Rows with Resolved Country',
+                          result.contrib_with_country,
+                          result.contrib_count,
+                        )}
+                        {renderCompletenessRow(
+                          'Rows with Resolved Institution',
+                          result.contrib_with_institution,
+                          result.contrib_count,
+                        )}
+                        {renderCompletenessRow(
+                          'Rows with Raw Affiliation String',
+                          result.contrib_with_raw_affiliation,
+                          result.contrib_count,
+                        )}
                       </div>
                       <div className="flex flex-col gap-5"></div>
                       <div className="flex flex-col gap-3">
-                      <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 border-b border-zinc-100 dark:border-zinc-800/80 pb-1">
-                        Institutions Table
-                      </span>
-                      
-                      <div className="flex flex-col gap-3 text-xs font-mono">
-                       
-                        {renderCompletenessRow('Institutions with ROR', result.institutions_with_ror, result.inst_count)}
+                        <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-200 border-b border-zinc-100 dark:border-zinc-800/80 pb-1">
+                          Institutions Table
+                        </span>
+
+                        <div className="flex flex-col gap-3 text-xs font-mono">
+                          {renderCompletenessRow(
+                            'Institutions with ROR',
+                            result.institutions_with_ror,
+                            result.inst_count,
+                          )}
+                        </div>
                       </div>
-                    </div>
                     </div>
 
                     <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800/80 text-xs font-sans text-zinc-600 dark:text-zinc-400 leading-relaxed flex items-start gap-2.5">
                       <Info className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">Relational Significance: </span>
-                        Contributions rows link author identities to their institutions. Raw affiliation strings provide the foundation for LLM and regex imputation pipelines when formal institution IDs are absent.
+                        <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">
+                          Relational Significance:{' '}
+                        </span>
+                        Contributions rows link author identities to their institutions. Raw
+                        affiliation strings provide the foundation for LLM and regex imputation
+                        pipelines when formal institution IDs are absent.
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* 3. Institution & Country Coverage Section */}
-              <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 bg-white dark:bg-zinc-900/20 flex flex-col gap-5 shadow-xs">
+              {/* Page 2 (Landscape PDF): Attribution Coverage & Influential Impact */}
+              <div ref={page2Ref} className="flex flex-col gap-6 bg-white dark:bg-zinc-950 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+                {/* Page 2 Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <div>
+                      <h2 className="text-base sm:text-lg font-mono font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                        Attribution Coverage &amp; Influential Metrics
+                      </h2>
+                      <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans block">
+                        Author attribution bucketing, field-normalized citations, and high-impact tier distribution
+                      </span>
+                    </div>
+                  </div>
+                  {selectedDB && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      {selectedDB}
+                    </span>
+                  )}
+                </div>
+
+                {/* 3. Institution & Country Coverage Section */}
+                <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 bg-white dark:bg-zinc-900/20 flex flex-col gap-5 shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
                   <span className="text-sm font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                     <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -796,10 +962,14 @@ export function CheckDB() {
                 </div>
 
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans leading-relaxed">
-                  Every paper is bucketed by whether its co-authors' institutions/countries have been resolved:
-                  <strong className="text-emerald-600 dark:text-emerald-400 ml-1">Full</strong> (every co-author matched),
-                  <strong className="text-amber-500 dark:text-amber-400 ml-1">Partial</strong> (at least one matched, but some missing),
-                  <strong className="text-rose-500 dark:text-rose-400 ml-1">Zero</strong> (no co-authors resolved).
+                  Every paper is bucketed by whether its co-authors' institutions/countries have
+                  been resolved:
+                  <strong className="text-emerald-600 dark:text-emerald-400 ml-1">Full</strong>{' '}
+                  (every co-author matched),
+                  <strong className="text-amber-500 dark:text-amber-400 ml-1">Partial</strong> (at
+                  least one matched, but some missing),
+                  <strong className="text-rose-500 dark:text-rose-400 ml-1">Zero</strong> (no
+                  co-authors resolved).
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -817,7 +987,12 @@ export function CheckDB() {
                       return (
                         <div className="flex flex-col gap-2.5 text-xs font-mono pt-1">
                           {renderCoverageRow('Full (Every Author Matched)', full, total, 'emerald')}
-                          {renderCoverageRow('Partial (Some Authors Missing)', partial, total, 'amber')}
+                          {renderCoverageRow(
+                            'Partial (Some Authors Missing)',
+                            partial,
+                            total,
+                            'amber',
+                          )}
                           {renderCoverageRow('Zero (No Authors Matched)', zero, total, 'rose')}
                         </div>
                       )
@@ -838,7 +1013,12 @@ export function CheckDB() {
                       return (
                         <div className="flex flex-col gap-2.5 text-xs font-mono pt-1">
                           {renderCoverageRow('Full (Every Author Matched)', full, total, 'emerald')}
-                          {renderCoverageRow('Partial (Some Authors Missing)', partial, total, 'amber')}
+                          {renderCoverageRow(
+                            'Partial (Some Authors Missing)',
+                            partial,
+                            total,
+                            'amber',
+                          )}
                           {renderCoverageRow('Zero (No Authors Matched)', zero, total, 'rose')}
                         </div>
                       )
@@ -846,14 +1026,6 @@ export function CheckDB() {
                   </div>
                 </div>
               </div>
-
-             
-              
-
-               
-
-
-              
 
               {/* 6. Influential Metrics Section */}
               <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 bg-white dark:bg-zinc-900/20 flex flex-col gap-5 shadow-xs">
@@ -865,7 +1037,8 @@ export function CheckDB() {
                         Influential Metrics &amp; High-Impact Attribution
                       </h2>
                       <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-sans">
-                        Completeness and institutional attribution across the corpus's highest-impact tiers
+                        Completeness and institutional attribution across the corpus's
+                        highest-impact tiers
                       </p>
                     </div>
                   </div>
@@ -892,7 +1065,10 @@ export function CheckDB() {
                           </span>
                         </div>
                         <div className="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, top10Pct)}%` }} />
+                          <div
+                            className="h-full bg-amber-500 rounded-full"
+                            style={{ width: `${Math.min(100, top10Pct)}%` }}
+                          />
                         </div>
 
                         <div className="mt-2 flex flex-col gap-2.5 text-xs font-mono pt-2 border-t border-zinc-200 dark:border-zinc-800">
@@ -926,7 +1102,10 @@ export function CheckDB() {
                           </span>
                         </div>
                         <div className="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(100, top1Pct)}%` }} />
+                          <div
+                            className="h-full bg-purple-500 rounded-full"
+                            style={{ width: `${Math.min(100, top1Pct)}%` }}
+                          />
                         </div>
 
                         <div className="mt-2 flex flex-col gap-2.5 text-xs font-mono pt-2 border-t border-zinc-200 dark:border-zinc-800">
@@ -941,36 +1120,34 @@ export function CheckDB() {
                   })()}
                 </div>
               </div>
+            </div>
 
-             
-              
-             
-
-              {/* Bottom Quick Links / Actions */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-                <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-mono font-bold text-zinc-800 dark:text-zinc-200">
-                      Ready to query this database?
-                    </span>
-                    <span className="text-[11px] text-zinc-500 font-sans">
-                      Execute analytical SQL queries directly in the browser using the DuckDB SQL Playground.
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link
-                    to="/sql"
-                    className="px-3.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-750 text-zinc-800 dark:text-zinc-200 font-mono text-xs font-semibold transition"
-                  >
-                    SQL Playground →
-                  </Link>
+            {/* Bottom Quick Links / Actions */}
+            <div data-html2canvas-ignore="true" className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+              <div className="flex items-center gap-3">
+                <Database className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="flex flex-col">
+                  <span className="text-xs font-mono font-bold text-zinc-800 dark:text-zinc-200">
+                    Ready to query this database?
+                  </span>
+                  <span className="text-[11px] text-zinc-500 font-sans">
+                    Execute analytical SQL queries directly in the browser using the DuckDB SQL
+                    Playground.
+                  </span>
                 </div>
               </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  to="/sql"
+                  className="px-3.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-750 text-zinc-800 dark:text-zinc-200 font-mono text-xs font-semibold transition"
+                >
+                  SQL Playground →
+                </Link>
+              </div>
             </div>
-          )}
+          </div>
+        )}
         </>
       )}
     </div>

@@ -7,9 +7,9 @@ import { Index } from './routes/index'
 import { Ingest } from './routes/ingest'
 import { Sql } from './routes/sql'
 import { Docs } from './routes/docs'
-import { Wos } from './routes/wos'
 import { Export } from './routes/export'
 import { CheckDB } from './routes/check-db'
+import { Insights } from './routes/insights'
 import './index.css'
 
 // 1. Programmatic Route Tree Setup
@@ -50,16 +50,16 @@ const sqlRoute = createRoute({
   component: Sql,
 })
 
+const insightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights',
+  component: Insights,
+})
+
 const docsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/docs',
   component: Docs,
-})
-
-const wosRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/wos',
-  component: Wos,
 })
 
 const routeTree = rootRoute.addChildren([
@@ -68,8 +68,8 @@ const routeTree = rootRoute.addChildren([
   exportRoute,
   checkDBRoute,
   sqlRoute,
+  insightsRoute,
   docsRoute,
-  wosRoute,
 ])
 
 // 2. Initialize Router instance

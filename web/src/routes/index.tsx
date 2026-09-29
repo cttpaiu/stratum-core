@@ -209,14 +209,18 @@ export function Index() {
 
   const handleDownloadPapers = async () => {
     if (syncing) {
-      alert('Pipeline or download execution running in Go background thread. Waiting for completion.')
+      alert(
+        'Pipeline or download execution running in Go background thread. Waiting for completion.',
+      )
       return
     }
 
     setSyncing(true)
     setProgress(0)
     setLogs([
-      '[' + new Date().toLocaleTimeString() + '] [INFO] Initiating paper download (openalex download)...',
+      '[' +
+        new Date().toLocaleTimeString() +
+        '] [INFO] Initiating paper download (openalex download)...',
     ])
 
     try {

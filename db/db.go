@@ -8,8 +8,9 @@ import (
 	"os"
 	"strings"
 
-	_ "github.com/duckdb/duckdb-go/v2"
 	"stratum/openalex"
+
+	_ "github.com/duckdb/duckdb-go/v2"
 )
 
 // DBManager wraps the DuckDB connection and handles schema initialization and batch insertions.
@@ -417,6 +418,9 @@ func (m *DBManager) LoadJSONL(jsonlPath string, progressChan chan<- int) (*LoadS
 func normalizeCountryCode(code string) string {
 	c := strings.ToUpper(strings.TrimSpace(code))
 	if c == "HK" {
+		return "CN"
+	}
+	if c == "MO" {
 		return "CN"
 	}
 	return c
