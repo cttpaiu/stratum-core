@@ -99,9 +99,7 @@ function SearchableListEditor({
 
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items
-    return items.filter((item) =>
-      item.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    return items.filter((item) => item.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [items, searchQuery])
 
   const invalidLines = useMemo(() => {
@@ -152,14 +150,12 @@ function SearchableListEditor({
 
   const handleRawBlur = () => {
     if (!validate) return
-    const normalizedLines = value
-      .split('\n')
-      .map((line) => {
-        const trimmed = line.trim()
-        if (!trimmed) return ''
-        const res = validate(trimmed)
-        return res.valid ? (res.normalized || trimmed) : line
-      })
+    const normalizedLines = value.split('\n').map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return ''
+      const res = validate(trimmed)
+      return res.valid ? res.normalized || trimmed : line
+    })
     onChange(normalizedLines.join('\n'))
   }
 
@@ -295,7 +291,9 @@ function SearchableListEditor({
                         key={item}
                         className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-white dark:bg-zinc-900/50 border border-zinc-150 dark:border-zinc-800/80 rounded group hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
                       >
-                        <span className="truncate select-all text-zinc-800 dark:text-zinc-200">{item}</span>
+                        <span className="truncate select-all text-zinc-800 dark:text-zinc-200">
+                          {item}
+                        </span>
                         <button
                           type="button"
                           onClick={() => handleDeleteItem(item)}
@@ -313,7 +311,8 @@ function SearchableListEditor({
                         onClick={() => setIsExpanded(true)}
                         className="text-[10px] font-mono text-zinc-455 hover:text-zinc-700 dark:hover:text-zinc-300 uppercase font-bold cursor-pointer transition-colors"
                       >
-                        + {filteredItems.length - maxCollapsedItems} more items (click expand to edit/view all)
+                        + {filteredItems.length - maxCollapsedItems} more items (click expand to
+                        edit/view all)
                       </button>
                     </div>
                   )}
@@ -338,7 +337,8 @@ function SearchableListEditor({
               <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded flex flex-col gap-1">
                 <span className="text-[11px] font-mono font-bold text-red-650 dark:text-red-400 flex items-center gap-1">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  Warning: {invalidLines.length} invalid {invalidLines.length === 1 ? 'item' : 'items'} detected
+                  Warning: {invalidLines.length} invalid{' '}
+                  {invalidLines.length === 1 ? 'item' : 'items'} detected
                 </span>
                 <span className="text-[10px] font-mono text-red-500 dark:text-red-400/80 max-h-16 overflow-y-auto">
                   Invalid values: {invalidLines.join(', ')}
@@ -387,9 +387,7 @@ function SearchableListEditor({
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 min-h-0">
-              {EditorContent(true)}
-            </div>
+            <div className="flex-1 min-h-0">{EditorContent(true)}</div>
 
             {/* Modal Footer */}
             <div className="flex justify-end pt-3 border-t border-zinc-150 dark:border-zinc-800 mt-4">
@@ -436,7 +434,8 @@ const validateDoi = (val: string) => {
   if (!match) {
     return {
       valid: false,
-      error: 'DOI must start with "10." followed by a 4-9 digit prefix and a slash (e.g. 10.1016/...)',
+      error:
+        'DOI must start with "10." followed by a 4-9 digit prefix and a slash (e.g. 10.1016/...)',
     }
   }
   return {
@@ -491,7 +490,7 @@ export function Ingest() {
   const [minDF, setMinDF] = useState(2)
   const [maxDF] = useState(0.85)
   const [useKeyBERT, setUseKeyBERT] = useState(true)
-  const [keybertModel, setKeybertModel] = useState("allenai-specter")
+  const [keybertModel, setKeybertModel] = useState('allenai-specter')
   const [candidatePool, setCandidatePool] = useState(20)
   const [alphaBlend, setAlphaBlend] = useState(0.1)
   const [extracting, setExtracting] = useState(false)
@@ -500,7 +499,11 @@ export function Ingest() {
   // AI Query Generation States
   const [generatingQuery, setGeneratingQuery] = useState(false)
   const [llmProvider, setLlmProvider] = useState<'gemini' | 'ollama'>(() => {
-    return (typeof window !== 'undefined' ? localStorage.getItem('stratum_llm_provider') as 'gemini' | 'ollama' : null) || 'gemini'
+    return (
+      (typeof window !== 'undefined'
+        ? (localStorage.getItem('stratum_llm_provider') as 'gemini' | 'ollama')
+        : null) || 'gemini'
+    )
   })
   const [llmApiKey, setLlmApiKey] = useState(() => {
     return typeof window !== 'undefined' ? localStorage.getItem('stratum_gemini_key') || '' : ''
@@ -515,14 +518,20 @@ export function Ingest() {
     return 'gemini-3.6-flash'
   })
   const [ollamaModel, setOllamaModel] = useState(() => {
-    return typeof window !== 'undefined' ? localStorage.getItem('stratum_ollama_model') || 'qwen3:4b' : 'qwen3:4b'
+    return typeof window !== 'undefined'
+      ? localStorage.getItem('stratum_ollama_model') || 'qwen3:4b'
+      : 'qwen3:4b'
   })
   const [ollamaUrl, setOllamaUrl] = useState(() => {
-    return typeof window !== 'undefined' ? localStorage.getItem('stratum_ollama_url') || 'http://localhost:11434' : 'http://localhost:11434'
+    return typeof window !== 'undefined'
+      ? localStorage.getItem('stratum_ollama_url') || 'http://localhost:11434'
+      : 'http://localhost:11434'
   })
   const [domainContext, setDomainContext] = useState('')
   const [showAIModal, setShowAIModal] = useState(false)
-  const [categorizedBreakdown, setCategorizedBreakdown] = useState<Record<string, string[]> | null>(null)
+  const [categorizedBreakdown, setCategorizedBreakdown] = useState<Record<string, string[]> | null>(
+    null,
+  )
 
   // Validation States
   const [validating, setValidating] = useState(false)
@@ -563,7 +572,9 @@ export function Ingest() {
   const [fetchingDownloadInfo, setFetchingDownloadInfo] = useState(false)
   const [downloadModalOpen, setDownloadModalOpen] = useState(false)
   const defaultJsonlName = useMemo(() => {
-    return activeProject && activeProject !== 'default' ? `${activeProject}.jsonl` : 'collected_papers.jsonl'
+    return activeProject && activeProject !== 'default'
+      ? `${activeProject}.jsonl`
+      : 'collected_papers.jsonl'
   }, [activeProject])
 
   const [downloadInfo, setDownloadInfo] = useState<DownloadPreflightInfo | null>(null)
@@ -579,7 +590,6 @@ export function Ingest() {
       setDownloadOutputFilename('collected_papers.jsonl')
     }
   }, [activeProject])
-
 
   // OpenAlex Topics States
   interface OpenAlexTopic {
@@ -602,7 +612,9 @@ export function Ingest() {
   const [openalexTopics, setOpenalexTopics] = useState<OpenAlexTopic[] | null>(null)
   const [openalexTopicsTotal, setOpenalexTopicsTotal] = useState<number | null>(null)
   const [openalexTopicsTotalPapers, setOpenalexTopicsTotalPapers] = useState<number | null>(null)
-  const [topicDiscoverySource, setTopicDiscoverySource] = useState<'keywords' | 'anchors' | null>(null)
+  const [topicDiscoverySource, setTopicDiscoverySource] = useState<'keywords' | 'anchors' | null>(
+    null,
+  )
   const [showAllTopics, setShowAllTopics] = useState(false)
 
   // Pipeline Sync States
@@ -654,7 +666,7 @@ export function Ingest() {
               addToast(
                 'success',
                 'Download Completed',
-                'JSONL download complete! File is ready on disk and selectable in Country Imputation.'
+                'JSONL download complete! File is ready on disk and selectable in Country Imputation.',
               )
             }
           }
@@ -716,28 +728,36 @@ export function Ingest() {
       .filter(Boolean)
   }, [topics])
 
-  const isTopicSelected = useCallback((topicId: string) => {
-    return selectedTopicsList.includes(topicId.trim())
-  }, [selectedTopicsList])
+  const isTopicSelected = useCallback(
+    (topicId: string) => {
+      return selectedTopicsList.includes(topicId.trim())
+    },
+    [selectedTopicsList],
+  )
 
-  const handleToggleTopic = useCallback((topicId: string, checked: boolean) => {
-    const trimmedId = topicId.trim()
-    let newList: string[]
-    if (checked) {
-      if (selectedTopicsList.includes(trimmedId)) return
-      newList = [...selectedTopicsList, trimmedId]
-    } else {
-      newList = selectedTopicsList.filter((t) => t !== trimmedId)
-    }
-    setTopics(newList.join('\n'))
-  }, [selectedTopicsList])
+  const handleToggleTopic = useCallback(
+    (topicId: string, checked: boolean) => {
+      const trimmedId = topicId.trim()
+      let newList: string[]
+      if (checked) {
+        if (selectedTopicsList.includes(trimmedId)) return
+        newList = [...selectedTopicsList, trimmedId]
+      } else {
+        newList = selectedTopicsList.filter((t) => t !== trimmedId)
+      }
+      setTopics(newList.join('\n'))
+    },
+    [selectedTopicsList],
+  )
 
   // Save States
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
   // Navigation & Tab States
-  const [activeTab, setActiveTab] = useState<'keywords' | 'topics' | 'execution' | 'imputation' | 'settings'>('keywords')
+  const [activeTab, setActiveTab] = useState<
+    'keywords' | 'topics' | 'execution' | 'imputation' | 'settings'
+  >('keywords')
 
   // Imputation Tab States (openalex impute-country)
   interface ImputeFileItem {
@@ -814,7 +834,9 @@ export function Ingest() {
   }
 
   // Web Browser Notification Permission State
-  const [notificationPermission, setNotificationPermission] = useState<'granted' | 'denied' | 'default' | 'unsupported'>(() => {
+  const [notificationPermission, setNotificationPermission] = useState<
+    'granted' | 'denied' | 'default' | 'unsupported'
+  >(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission
     }
@@ -826,7 +848,11 @@ export function Ingest() {
     const permission = await Notification.requestPermission()
     setNotificationPermission(permission)
     if (permission === 'granted') {
-      addToast('success', 'Notifications Enabled', 'You will now receive desktop notifications when processes finish.')
+      addToast(
+        'success',
+        'Notifications Enabled',
+        'You will now receive desktop notifications when processes finish.',
+      )
     }
   }
 
@@ -977,10 +1003,12 @@ export function Ingest() {
 
       if (response.ok) {
         const data = await response.json()
-        const list = (data.keywords || []).map((k: { term: string; score: number; tfidf_score?: number; keybert_score?: number }) => ({
-          ...k,
-          selected: true,
-        }))
+        const list = (data.keywords || []).map(
+          (k: { term: string; score: number; tfidf_score?: number; keybert_score?: number }) => ({
+            ...k,
+            selected: true,
+          }),
+        )
         setExtractedKeywords(list)
         setAnchorsCount(data.anchors_count || 0)
         fetchConfig() // Reload config to reflect newly saved anchors in textarea
@@ -1035,15 +1063,21 @@ export function Ingest() {
     const terms = selected.length > 0 ? selected : extractedKeywords.map((k) => k.term)
 
     if (terms.length === 0) {
-      triggerAlert('info', 'No Keywords Available', 'Please upload a catalog and extract keywords first.')
+      triggerAlert(
+        'info',
+        'No Keywords Available',
+        'Please upload a catalog and extract keywords first.',
+      )
       return
     }
 
     setGeneratingQuery(true)
     const activeModel =
       llmProvider === 'gemini'
-        ? (llmModel.trim().startsWith('gemini') ? llmModel.trim() : 'gemini-3.6-flash')
-        : (ollamaModel.replace(/\s+/g, '') || 'qwen3:4b')
+        ? llmModel.trim().startsWith('gemini')
+          ? llmModel.trim()
+          : 'gemini-3.6-flash'
+        : ollamaModel.replace(/\s+/g, '') || 'qwen3:4b'
 
     try {
       const response = await fetch('/api/query/generate', {
@@ -1068,7 +1102,11 @@ export function Ingest() {
           setQueryValid(data.valid)
           setQueryErrors(data.errors || [])
           setShowAIModal(false)
-          addToast('success', 'Boolean Query Generated', `Auto-categorized ${terms.length} keywords into bounded Boolean query.`)
+          addToast(
+            'success',
+            'Boolean Query Generated',
+            `Auto-categorized ${terms.length} keywords into bounded Boolean query.`,
+          )
         }
       } else {
         const errData = await response.json()
@@ -1366,20 +1404,23 @@ export function Ingest() {
         .map((t) => t.trim())
         .filter((t) => t && !t.startsWith('#'))
 
-      const response = await fetch(`/api/download-papers?project=${encodeURIComponent(activeProject)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          output: downloadOutputFilename.trim() || defaultJsonlName,
-          no_topics: downloadNoTopics,
-          overwrite: downloadOverwrite,
-          query: keywords,
-          date_from: dateFrom,
-          date_to: dateTo,
-          doc_types: docTypesList,
-          topics: topicsList,
-        }),
-      })
+      const response = await fetch(
+        `/api/download-papers?project=${encodeURIComponent(activeProject)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            output: downloadOutputFilename.trim() || defaultJsonlName,
+            no_topics: downloadNoTopics,
+            overwrite: downloadOverwrite,
+            query: keywords,
+            date_from: dateFrom,
+            date_to: dateTo,
+            doc_types: docTypesList,
+            topics: topicsList,
+          }),
+        },
+      )
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
@@ -1416,7 +1457,11 @@ export function Ingest() {
     try {
       const res = await fetch(`/api/pipeline/cancel?project=${activeProject}`, { method: 'POST' })
       if (res.ok) {
-        addToast('info', 'Cancellation Requested', 'Cancellation signal sent. Saving progress state...')
+        addToast(
+          'info',
+          'Cancellation Requested',
+          'Cancellation signal sent. Saving progress state...',
+        )
       }
     } catch (err) {
       console.error('Failed to cancel pipeline:', err)
@@ -1486,13 +1531,15 @@ export function Ingest() {
     setSelectedImputeFile(filename)
     if (filename) {
       const stem = filename.replace(/(_imputed)?\.jsonl$/i, '')
-      const projName = activeProject && activeProject !== 'default' ? activeProject : 'collected_papers'
+      const projName =
+        activeProject && activeProject !== 'default' ? activeProject : 'collected_papers'
       setImputeOutputPath(`${stem || projName}_imputed.jsonl`)
     }
   }
 
   const handleStartImputation = async () => {
-    const projName = activeProject && activeProject !== 'default' ? activeProject : 'collected_papers'
+    const projName =
+      activeProject && activeProject !== 'default' ? activeProject : 'collected_papers'
     const inputFile = selectedImputeFile || `${projName}.jsonl`
     if (!inputFile) {
       triggerAlert('error', 'Input File Required', 'Please select an input JSONL file.')
@@ -1513,7 +1560,9 @@ export function Ingest() {
     setImputeRunning(true)
     setImputeError(null)
     setImputeStats({})
-    setImputeLogs([`[${new Date().toLocaleTimeString()}] [INFO] Starting OpenAlex country imputation for ${inputFile}...`])
+    setImputeLogs([
+      `[${new Date().toLocaleTimeString()}] [INFO] Starting OpenAlex country imputation for ${inputFile}...`,
+    ])
 
     try {
       const payload: {
@@ -1541,7 +1590,11 @@ export function Ingest() {
 
       const data = await res.json()
       setImputeOutputFile(data.output_file || null)
-      addToast('info', 'Imputation Started', `Country imputation started for ${inputFile}. Live progress tracking below.`)
+      addToast(
+        'info',
+        'Imputation Started',
+        `Country imputation started for ${inputFile}. Live progress tracking below.`,
+      )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       setImputeRunning(false)
@@ -1553,7 +1606,11 @@ export function Ingest() {
     try {
       const res = await fetch(`/api/impute/cancel?project=${activeProject}`, { method: 'POST' })
       if (res.ok) {
-        addToast('info', 'Cancellation Requested', 'Sent cancellation signal to imputation process.')
+        addToast(
+          'info',
+          'Cancellation Requested',
+          'Sent cancellation signal to imputation process.',
+        )
       }
     } catch (err) {
       console.error('Failed to cancel imputation:', err)
@@ -1591,7 +1648,11 @@ export function Ingest() {
             if (st.error) {
               addToast('error', 'Imputation Failed', st.error)
             } else {
-              addToast('success', 'Imputation Complete', `Finished country imputation! File: ${st.output_file || 'output JSONL'}`)
+              addToast(
+                'success',
+                'Imputation Complete',
+                `Finished country imputation! File: ${st.output_file || 'output JSONL'}`,
+              )
               fetchImputeFiles()
             }
           }
@@ -1714,11 +1775,7 @@ export function Ingest() {
         return
       }
       const errMsg = err instanceof Error ? err.message : String(err)
-      triggerAlert(
-        'error',
-        'Topics Request Failed',
-        errMsg,
-      )
+      triggerAlert('error', 'Topics Request Failed', errMsg)
       addToast('error', 'Topics Analysis Failed', errMsg)
       sendNotification('Stratum: Topics Analysis Failed', errMsg)
     } finally {
@@ -1904,7 +1961,11 @@ export function Ingest() {
       .filter(Boolean)
     const combined = Array.from(new Set([...current, ...criticalAndHigh]))
     setTopics(combined.join('\n'))
-    addToast('success', 'Topics Added', `Added ${criticalAndHigh.length} Critical & High topics to Target Topics.`)
+    addToast(
+      'success',
+      'Topics Added',
+      `Added ${criticalAndHigh.length} Critical & High topics to Target Topics.`,
+    )
   }
 
   const handleAddAllNewTopics = () => {
@@ -1922,7 +1983,11 @@ export function Ingest() {
       .filter(Boolean)
     const combined = Array.from(new Set([...current, ...newTopics]))
     setTopics(combined.join('\n'))
-    addToast('success', 'New Topics Added', `Added ${newTopics.length} new topics to Target Topics.`)
+    addToast(
+      'success',
+      'New Topics Added',
+      `Added ${newTopics.length} new topics to Target Topics.`,
+    )
   }
 
   const handleAddTopNTopics = (n: number) => {
@@ -1946,7 +2011,11 @@ export function Ingest() {
       .filter(Boolean)
     const combined = Array.from(new Set([...current, ...allIds]))
     setTopics(combined.join('\n'))
-    addToast('success', 'All Topics Added', `Added all ${allIds.length} discovered topics to Target Topics.`)
+    addToast(
+      'success',
+      'All Topics Added',
+      `Added all ${allIds.length} discovered topics to Target Topics.`,
+    )
   }
 
   // Save Config Handler
@@ -1966,7 +2035,7 @@ export function Ingest() {
       triggerAlert(
         'error',
         'Validation Error',
-        `Cannot save configuration: Target Topics contains invalid entries: ${invalidTopicsList.join(', ')}`
+        `Cannot save configuration: Target Topics contains invalid entries: ${invalidTopicsList.join(', ')}`,
       )
       setSaving(false)
       return
@@ -1983,7 +2052,7 @@ export function Ingest() {
       triggerAlert(
         'error',
         'Validation Error',
-        `Cannot save configuration: Anchor DOIs contains invalid entries: ${invalidAnchorsList.join(', ')}`
+        `Cannot save configuration: Anchor DOIs contains invalid entries: ${invalidAnchorsList.join(', ')}`,
       )
       setSaving(false)
       return
@@ -1995,7 +2064,7 @@ export function Ingest() {
         const trimmed = t.trim()
         if (!trimmed) return ''
         const res = validateTopic(trimmed)
-        return res.valid ? (res.normalized || trimmed) : t
+        return res.valid ? res.normalized || trimmed : t
       })
       .join('\n')
 
@@ -2005,7 +2074,7 @@ export function Ingest() {
         const trimmed = a.trim()
         if (!trimmed) return ''
         const res = validateDoi(trimmed)
-        return res.valid ? (res.normalized || trimmed) : a
+        return res.valid ? res.normalized || trimmed : a
       })
       .join('\n')
 
@@ -2087,9 +2156,7 @@ export function Ingest() {
             }`}
           >
             <div className="flex flex-col gap-1">
-              <span className="font-bold uppercase tracking-wider text-[10px]">
-                {toast.title}
-              </span>
+              <span className="font-bold uppercase tracking-wider text-[10px]">{toast.title}</span>
               <p className="font-sans leading-relaxed text-zinc-600 dark:text-zinc-400">
                 {toast.message}
               </p>
@@ -2198,7 +2265,10 @@ export function Ingest() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1">
             {configHistory.length > 0 && (
               <div className="flex flex-col gap-1 min-w-[200px]">
-                <label htmlFor="version-selector" className="text-[10px] font-mono uppercase text-zinc-400 font-bold">
+                <label
+                  htmlFor="version-selector"
+                  className="text-[10px] font-mono uppercase text-zinc-400 font-bold"
+                >
                   Load Saved Version
                 </label>
                 <select
@@ -2239,7 +2309,10 @@ export function Ingest() {
             )}
 
             <div className="flex flex-col gap-1 flex-1 max-w-md">
-              <label htmlFor="save-label" className="text-[10px] font-mono uppercase text-zinc-400 font-bold">
+              <label
+                htmlFor="save-label"
+                className="text-[10px] font-mono uppercase text-zinc-400 font-bold"
+              >
                 Revision Label / Commit Message (Optional)
               </label>
               <input
@@ -2294,47 +2367,45 @@ export function Ingest() {
                   1. Select CSV or Excel File
                 </span>
                 <div className="flex gap-2 min-w-0">
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                />
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                  />
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 border border-dashed border-zinc-300 dark:border-zinc-800 rounded font-mono text-xs cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition"
-                >
-                  <Upload className="h-4 w-4 text-zinc-400 shrink-0" />
-
-                  <span
-                    className="min-w-0 flex-1 truncate text-left text-zinc-700 dark:text-zinc-300"
-                    title={file?.name}
-                  >
-                    {file ? file.name : 'Choose catalog file...'}
-                  </span>
-                </button>
-
-                {file && (
                   <button
                     type="button"
-                    onClick={triggerUpload}
-                    disabled={uploading}
-                    className="shrink-0 px-4 py-2 border rounded font-mono text-xs font-bold uppercase tracking-wider bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 border border-dashed border-zinc-300 dark:border-zinc-800 rounded font-mono text-xs cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/60 transition"
                   >
-                    {uploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Upload'
-                    )}
+                    <Upload className="h-4 w-4 text-zinc-400 shrink-0" />
+
+                    <span
+                      className="min-w-0 flex-1 truncate text-left text-zinc-700 dark:text-zinc-300"
+                      title={file?.name}
+                    >
+                      {file ? file.name : 'Choose catalog file...'}
+                    </span>
                   </button>
-                )}
-              </div>
+
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={triggerUpload}
+                      disabled={uploading}
+                      className="shrink-0 px-4 py-2 border rounded font-mono text-xs font-bold uppercase tracking-wider bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 cursor-pointer"
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Upload'}
+                    </button>
+                  )}
+                </div>
                 {uploadSuccess && (
                   <span className="text-[10px] font-mono text-green-600 dark:text-green-400 flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Catalog parsed. {rowCount !== null ? `${rowCount.toLocaleString()} rows and ` : ''}{columns.length} columns detected.
+                    <Check className="h-3 w-3" /> Catalog parsed.{' '}
+                    {rowCount !== null ? `${rowCount.toLocaleString()} rows and ` : ''}
+                    {columns.length} columns detected.
                   </span>
                 )}
               </div>
@@ -2476,7 +2547,9 @@ export function Ingest() {
                             onChange={(e) => setKeybertModel(e.target.value)}
                             className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-1.5 rounded text-xs focus:outline-none"
                           >
-                            <option value="allenai-specter">allenai-specter (Scientific Papers)</option>
+                            <option value="allenai-specter">
+                              allenai-specter (Scientific Papers)
+                            </option>
                           </select>
                         </div>
 
@@ -2508,7 +2581,10 @@ export function Ingest() {
                           </div>
                         </div>
                         <span className="text-[9px] text-zinc-400 leading-normal font-sans">
-                          Candidate pool extracts {candidatePool} TF-IDF terms and re-ranks them via dense semantic embeddings, returning top {topN} (α={alphaBlend}: {Math.round(alphaBlend*100)}% TF-IDF + {Math.round((1-alphaBlend)*100)}% KeyBERT).
+                          Candidate pool extracts {candidatePool} TF-IDF terms and re-ranks them via
+                          dense semantic embeddings, returning top {topN} (α={alphaBlend}:{' '}
+                          {Math.round(alphaBlend * 100)}% TF-IDF +{' '}
+                          {Math.round((1 - alphaBlend) * 100)}% KeyBERT).
                         </span>
                       </div>
                     )}
@@ -2531,7 +2607,8 @@ export function Ingest() {
                   </button>
                   {anchorsCount !== null && anchorsCount > 0 && (
                     <span className="text-[10px] font-mono text-green-600 dark:text-green-400 flex items-center gap-1 mt-1">
-                      <Check className="h-3 w-3" /> Extracted {anchorsCount} anchor DOIs to anchor.txt.
+                      <Check className="h-3 w-3" /> Extracted {anchorsCount} anchor DOIs to
+                      anchor.txt.
                     </span>
                   )}
                 </div>
@@ -2542,8 +2619,8 @@ export function Ingest() {
                 <div className="flex flex-col gap-3 border-t border-zinc-200 dark:border-zinc-800 pt-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold uppercase text-zinc-500">
-                      3. Select Scored Keywords ({extractedKeywords.filter((k) => k.selected).length}{' '}
-                      selected)
+                      3. Select Scored Keywords (
+                      {extractedKeywords.filter((k) => k.selected).length} selected)
                     </span>
                     <div className="flex gap-2 text-[10px] font-mono">
                       <button
@@ -2601,7 +2678,11 @@ export function Ingest() {
                               </span>
                               <span
                                 className="text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 px-1.5 py-0.5 rounded font-mono font-bold"
-                                title={alphaBlend === 0 ? `KeyBERT Score: ${kw.score.toFixed(4)}` : `Combined (α=${alphaBlend}): ${kw.score.toFixed(4)}`}
+                                title={
+                                  alphaBlend === 0
+                                    ? `KeyBERT Score: ${kw.score.toFixed(4)}`
+                                    : `Combined (α=${alphaBlend}): ${kw.score.toFixed(4)}`
+                                }
                               >
                                 c: {kw.score.toFixed(4)}
                               </span>
@@ -2620,7 +2701,6 @@ export function Ingest() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-
                     <button
                       type="button"
                       onClick={() => handleAutoGenerateQuery()}
@@ -2701,17 +2781,25 @@ export function Ingest() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                       <div className="flex flex-col gap-0.5 p-2 bg-white dark:bg-zinc-900 rounded border border-zinc-200/60 dark:border-zinc-800">
                         <span className="font-bold text-emerald-600 dark:text-emerald-400 text-[10px] uppercase">
-                          1. Core Technology ({categorizedBreakdown['1_core_technology']?.length || 0})
+                          1. Core Technology (
+                          {categorizedBreakdown['1_core_technology']?.length || 0})
                         </span>
-                        <span className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate" title={categorizedBreakdown['1_core_technology']?.join(', ')}>
+                        <span
+                          className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate"
+                          title={categorizedBreakdown['1_core_technology']?.join(', ')}
+                        >
                           {categorizedBreakdown['1_core_technology']?.join(', ') || '(none)'}
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5 p-2 bg-white dark:bg-zinc-900 rounded border border-zinc-200/60 dark:border-zinc-800">
                         <span className="font-bold text-blue-600 dark:text-blue-400 text-[10px] uppercase">
-                          2. Methods & Tools ({categorizedBreakdown['2_methods_tools']?.length || 0})
+                          2. Methods & Tools ({categorizedBreakdown['2_methods_tools']?.length || 0}
+                          )
                         </span>
-                        <span className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate" title={categorizedBreakdown['2_methods_tools']?.join(', ')}>
+                        <span
+                          className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate"
+                          title={categorizedBreakdown['2_methods_tools']?.join(', ')}
+                        >
                           {categorizedBreakdown['2_methods_tools']?.join(', ') || '(none)'}
                         </span>
                       </div>
@@ -2719,7 +2807,10 @@ export function Ingest() {
                         <span className="font-bold text-purple-600 dark:text-purple-400 text-[10px] uppercase">
                           3. Mechanisms ({categorizedBreakdown['3_mechanisms']?.length || 0})
                         </span>
-                        <span className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate" title={categorizedBreakdown['3_mechanisms']?.join(', ')}>
+                        <span
+                          className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate"
+                          title={categorizedBreakdown['3_mechanisms']?.join(', ')}
+                        >
                           {categorizedBreakdown['3_mechanisms']?.join(', ') || '(none)'}
                         </span>
                       </div>
@@ -2727,7 +2818,10 @@ export function Ingest() {
                         <span className="font-bold text-amber-600 dark:text-amber-400 text-[10px] uppercase">
                           4. Applications ({categorizedBreakdown['4_applications']?.length || 0})
                         </span>
-                        <span className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate" title={categorizedBreakdown['4_applications']?.join(', ')}>
+                        <span
+                          className="text-zinc-600 dark:text-zinc-400 text-[10px] truncate"
+                          title={categorizedBreakdown['4_applications']?.join(', ')}
+                        >
                           {categorizedBreakdown['4_applications']?.join(', ') || '(none)'}
                         </span>
                       </div>
@@ -2796,7 +2890,9 @@ export function Ingest() {
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                      Configure OpenAlex Topic IDs (<code>topics.txt</code>) in the dedicated <strong>Topic ID</strong> tab with live cluster discovery, bulk addition, and format validation.
+                      Configure OpenAlex Topic IDs (<code>topics.txt</code>) in the dedicated{' '}
+                      <strong>Topic ID</strong> tab with live cluster discovery, bulk addition, and
+                      format validation.
                     </p>
                   </div>
                   <button
@@ -2830,7 +2926,8 @@ export function Ingest() {
                     </span>
                   </div>
                   <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                    Store and manage OpenAlex topic identifiers (format <code>T12345</code>) to scope queries and ingestion pipelines.
+                    Store and manage OpenAlex topic identifiers (format <code>T12345</code>) to
+                    scope queries and ingestion pipelines.
                   </p>
                 </div>
 
@@ -2854,10 +2951,14 @@ export function Ingest() {
                     <Sparkles className="h-3 w-3 text-amber-500" /> Topic ID Format Guide
                   </div>
                   <p className="text-[10px] font-sans text-zinc-500 dark:text-zinc-400">
-                    OpenAlex classifies papers into primary topics. Each Topic ID begins with a &apos;T&apos; followed by 5 digits (e.g., <code>T10020</code> for Lithium-ion batteries).
+                    OpenAlex classifies papers into primary topics. Each Topic ID begins with a
+                    &apos;T&apos; followed by 5 digits (e.g., <code>T10020</code> for Lithium-ion
+                    batteries).
                   </p>
                   <p className="text-[10px] font-sans text-zinc-400">
-                    You can add IDs manually above or use the <strong>OpenAlex Topic Discovery</strong> tool on the right to discover and select topics automatically.
+                    You can add IDs manually above or use the{' '}
+                    <strong>OpenAlex Topic Discovery</strong> tool on the right to discover and
+                    select topics automatically.
                   </p>
                 </div>
               </div>
@@ -2873,7 +2974,8 @@ export function Ingest() {
                       OpenAlex Topic Discovery & Cluster Analysis
                     </span>
                     <p className="text-[11px] text-zinc-400 font-sans">
-                      Fetch research topics from OpenAlex matching active keywords to inspect cluster sizes and bulk-add to <code>topics.txt</code>.
+                      Fetch research topics from OpenAlex matching active keywords to inspect
+                      cluster sizes and bulk-add to <code>topics.txt</code>.
                     </p>
                   </div>
                 </div>
@@ -2921,7 +3023,9 @@ export function Ingest() {
                   {openalexTopics && openalexTopics.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10px] font-mono uppercase text-zinc-400 font-bold">Bulk Add:</span>
+                        <span className="text-[10px] font-mono uppercase text-zinc-400 font-bold">
+                          Bulk Add:
+                        </span>
                         {topicDiscoverySource === 'anchors' && (
                           <>
                             <button
@@ -3002,7 +3106,8 @@ export function Ingest() {
                         <div className="flex items-center gap-2">
                           {topicDiscoverySource === 'anchors' ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/50 dark:border-amber-800/50 flex items-center gap-1">
-                              <Bookmark className="h-3 w-3" /> Anchor Papers Topic Extraction (topic-search)
+                              <Bookmark className="h-3 w-3" /> Anchor Papers Topic Extraction
+                              (topic-search)
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300/50 dark:border-emerald-800/50 flex items-center gap-1">
@@ -3010,8 +3115,12 @@ export function Ingest() {
                             </span>
                           )}
                           <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                            <strong>{openalexTopicsTotal?.toLocaleString() || openalexTopics.length}</strong> unique topics across{' '}
-                            <strong>{openalexTopicsTotalPapers?.toLocaleString()}</strong> {topicDiscoverySource === 'anchors' ? 'anchor papers' : 'papers'}.
+                            <strong>
+                              {openalexTopicsTotal?.toLocaleString() || openalexTopics.length}
+                            </strong>{' '}
+                            unique topics across{' '}
+                            <strong>{openalexTopicsTotalPapers?.toLocaleString()}</strong>{' '}
+                            {topicDiscoverySource === 'anchors' ? 'anchor papers' : 'papers'}.
                           </span>
                         </div>
                       </div>
@@ -3041,111 +3150,131 @@ export function Ingest() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {openalexTopics.slice(0, showAllTopics ? openalexTopics.length : 15).map((topic) => {
-                              const selected = isTopicSelected(topic.topic_id)
-                              const isNew = topic.status === 'NEW' || (!topic.status && !selected)
-                              return (
-                                <tr
-                                  key={topic.topic_id}
-                                  className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors ${
-                                    selected ? 'bg-zinc-50/80 dark:bg-zinc-900/40' : ''
-                                  }`}
-                                >
-                                  <td className="p-3 text-center w-12">
-                                    <input
-                                      type="checkbox"
-                                      checked={selected}
-                                      onChange={(e) => handleToggleTopic(topic.topic_id, e.target.checked)}
-                                      className="rounded border-zinc-300 text-zinc-900 focus:ring-0 cursor-pointer"
-                                    />
-                                  </td>
-                                  <td className="p-3 font-mono text-[11px]">
-                                    <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-800 dark:text-zinc-300 font-semibold border border-zinc-200/50 dark:border-zinc-800">
-                                      {topic.topic_id}
-                                    </span>
-                                  </td>
+                            {openalexTopics
+                              .slice(0, showAllTopics ? openalexTopics.length : 15)
+                              .map((topic) => {
+                                const selected = isTopicSelected(topic.topic_id)
+                                const isNew = topic.status === 'NEW' || (!topic.status && !selected)
+                                return (
+                                  <tr
+                                    key={topic.topic_id}
+                                    className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors ${
+                                      selected ? 'bg-zinc-50/80 dark:bg-zinc-900/40' : ''
+                                    }`}
+                                  >
+                                    <td className="p-3 text-center w-12">
+                                      <input
+                                        type="checkbox"
+                                        checked={selected}
+                                        onChange={(e) =>
+                                          handleToggleTopic(topic.topic_id, e.target.checked)
+                                        }
+                                        className="rounded border-zinc-300 text-zinc-900 focus:ring-0 cursor-pointer"
+                                      />
+                                    </td>
+                                    <td className="p-3 font-mono text-[11px]">
+                                      <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-800 dark:text-zinc-300 font-semibold border border-zinc-200/50 dark:border-zinc-800">
+                                        {topic.topic_id}
+                                      </span>
+                                    </td>
 
-                                  {topicDiscoverySource === 'anchors' && (
-                                    <>
-                                      <td className="p-3 text-center font-mono text-[10px]">
-                                        {isNew ? (
-                                          <span className="px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-300/40">
-                                            NEW
-                                          </span>
-                                        ) : (
-                                          <span className="px-1.5 py-0.5 rounded font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                                            Present
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="p-3 font-mono text-[10px]">
-                                        {topic.importance ? (
-                                          <span
-                                            className={`font-semibold ${
-                                              topic.importance.includes('Critical')
-                                                ? 'text-red-600 dark:text-red-400'
-                                                : topic.importance.includes('High')
-                                                ? 'text-amber-600 dark:text-amber-400'
-                                                : topic.importance.includes('Medium')
-                                                ? 'text-blue-600 dark:text-blue-400'
-                                                : 'text-zinc-400'
+                                    {topicDiscoverySource === 'anchors' && (
+                                      <>
+                                        <td className="p-3 text-center font-mono text-[10px]">
+                                          {isNew ? (
+                                            <span className="px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-300/40">
+                                              NEW
+                                            </span>
+                                          ) : (
+                                            <span className="px-1.5 py-0.5 rounded font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                              Present
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="p-3 font-mono text-[10px]">
+                                          {topic.importance ? (
+                                            <span
+                                              className={`font-semibold ${
+                                                topic.importance.includes('Critical')
+                                                  ? 'text-red-600 dark:text-red-400'
+                                                  : topic.importance.includes('High')
+                                                    ? 'text-amber-600 dark:text-amber-400'
+                                                    : topic.importance.includes('Medium')
+                                                      ? 'text-blue-600 dark:text-blue-400'
+                                                      : 'text-zinc-400'
+                                              }`}
+                                            >
+                                              {topic.importance}
+                                            </span>
+                                          ) : (
+                                            '—'
+                                          )}
+                                        </td>
+                                      </>
+                                    )}
+
+                                    <td
+                                      className="p-3 font-medium text-zinc-900 dark:text-zinc-100 max-w-[220px]"
+                                      title={`${topic.display_name} — ${topic.description || ''}`}
+                                    >
+                                      <div className="font-semibold truncate">
+                                        {topic.display_name}
+                                      </div>
+                                      {(topic.subfield || topic.field) && (
+                                        <div className="text-[10px] text-zinc-400 truncate">
+                                          {[topic.subfield, topic.field, topic.domain]
+                                            .filter(Boolean)
+                                            .join(' › ')}
+                                        </div>
+                                      )}
+                                      {topic.description && !topic.subfield && (
+                                        <div className="text-[10px] text-zinc-400 truncate">
+                                          {topic.description}
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    <td className="p-3 text-right font-mono font-medium text-zinc-950 dark:text-zinc-50">
+                                      {(topic.frequency ?? topic.paper_count).toLocaleString()}
+                                    </td>
+
+                                    <td className="p-3">
+                                      <div className="flex items-center justify-end gap-2 w-full">
+                                        <div className="w-14 bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden shrink-0">
+                                          <div
+                                            className={`h-full rounded-full ${
+                                              topicDiscoverySource === 'anchors'
+                                                ? 'bg-amber-500'
+                                                : 'bg-zinc-900 dark:bg-zinc-100'
                                             }`}
-                                          >
-                                            {topic.importance}
+                                            style={{
+                                              width: `${Math.min(topic.coverage ?? topic.percentage, 100)}%`,
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400 w-12 text-right">
+                                          {(topic.coverage ?? topic.percentage).toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    </td>
+
+                                    {topicDiscoverySource === 'anchors' && (
+                                      <td
+                                        className="p-3 font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[140px]"
+                                        title={topic.example_doi || ''}
+                                      >
+                                        {topic.example_doi ? (
+                                          <span className="bg-zinc-100 dark:bg-zinc-900 px-1 py-0.5 rounded border border-zinc-200/40 dark:border-zinc-800 truncate block">
+                                            {topic.example_doi}
                                           </span>
                                         ) : (
                                           '—'
                                         )}
                                       </td>
-                                    </>
-                                  )}
-
-                                  <td className="p-3 font-medium text-zinc-900 dark:text-zinc-100 max-w-[220px]" title={`${topic.display_name} — ${topic.description || ''}`}>
-                                    <div className="font-semibold truncate">{topic.display_name}</div>
-                                    {(topic.subfield || topic.field) && (
-                                      <div className="text-[10px] text-zinc-400 truncate">
-                                        {[topic.subfield, topic.field, topic.domain].filter(Boolean).join(' › ')}
-                                      </div>
                                     )}
-                                    {topic.description && !topic.subfield && (
-                                      <div className="text-[10px] text-zinc-400 truncate">{topic.description}</div>
-                                    )}
-                                  </td>
-
-                                  <td className="p-3 text-right font-mono font-medium text-zinc-950 dark:text-zinc-50">
-                                    {(topic.frequency ?? topic.paper_count).toLocaleString()}
-                                  </td>
-
-                                  <td className="p-3">
-                                    <div className="flex items-center justify-end gap-2 w-full">
-                                      <div className="w-14 bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden shrink-0">
-                                        <div
-                                          className={`h-full rounded-full ${
-                                            topicDiscoverySource === 'anchors' ? 'bg-amber-500' : 'bg-zinc-900 dark:bg-zinc-100'
-                                          }`}
-                                          style={{ width: `${Math.min(topic.coverage ?? topic.percentage, 100)}%` }}
-                                        />
-                                      </div>
-                                      <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400 w-12 text-right">
-                                        {(topic.coverage ?? topic.percentage).toFixed(1)}%
-                                      </span>
-                                    </div>
-                                  </td>
-
-                                  {topicDiscoverySource === 'anchors' && (
-                                    <td className="p-3 font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[140px]" title={topic.example_doi || ''}>
-                                      {topic.example_doi ? (
-                                        <span className="bg-zinc-100 dark:bg-zinc-900 px-1 py-0.5 rounded border border-zinc-200/40 dark:border-zinc-800 truncate block">
-                                          {topic.example_doi}
-                                        </span>
-                                      ) : (
-                                        '—'
-                                      )}
-                                    </td>
-                                  )}
-                                </tr>
-                              )
-                            })}
+                                  </tr>
+                                )
+                              })}
                           </tbody>
                         </table>
                       </div>
@@ -3156,7 +3285,9 @@ export function Ingest() {
                           onClick={() => setShowAllTopics(!showAllTopics)}
                           className="mx-auto mt-1 px-4 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 rounded font-mono text-[10px] uppercase font-bold text-zinc-600 dark:text-zinc-400 cursor-pointer"
                         >
-                          {showAllTopics ? 'Show Less (Top 15)' : `Show All ${openalexTopics.length} Discovered Topics`}
+                          {showAllTopics
+                            ? 'Show Less (Top 15)'
+                            : `Show All ${openalexTopics.length} Discovered Topics`}
                         </button>
                       )}
                     </div>
@@ -3164,9 +3295,13 @@ export function Ingest() {
                 ) : (
                   <div className="py-10 border border-dashed border-zinc-200 dark:border-zinc-800 rounded text-center flex flex-col items-center justify-center gap-2 text-zinc-400">
                     <PieChart className="h-6 w-6 text-zinc-300 dark:text-zinc-700" />
-                    <span className="text-xs font-mono uppercase font-bold">No Topics Discovered Yet</span>
+                    <span className="text-xs font-mono uppercase font-bold">
+                      No Topics Discovered Yet
+                    </span>
                     <span className="text-[11px] font-sans text-zinc-400 max-w-md">
-                      Click <strong>Discover from Keywords</strong> to cluster your keyword query results, or <strong>Fetch from Anchors</strong> to extract topic IDs directly from your anchor benchmark papers.
+                      Click <strong>Discover from Keywords</strong> to cluster your keyword query
+                      results, or <strong>Fetch from Anchors</strong> to extract topic IDs directly
+                      from your anchor benchmark papers.
                     </span>
                   </div>
                 )}
@@ -3198,7 +3333,8 @@ export function Ingest() {
                     </label>
                   </div>
                   <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                    Execute keyword search (<code>openalex search</code>) or topic-filtered search (<code>openalex search-filtered</code>) against the live OpenAlex API.
+                    Execute keyword search (<code>openalex search</code>) or topic-filtered search (
+                    <code>openalex search-filtered</code>) against the live OpenAlex API.
                   </p>
 
                   {/* Results badge / panel */}
@@ -3220,7 +3356,8 @@ export function Ingest() {
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-300/50 dark:border-indigo-800/50 flex items-center gap-1">
-                              <Filter className="h-3 w-3" /> Filtered Search (openalex search-filtered)
+                              <Filter className="h-3 w-3" /> Filtered Search (openalex
+                              search-filtered)
                             </span>
                           )}
                         </div>
@@ -3244,7 +3381,14 @@ export function Ingest() {
                           </span>
                           {searchMode === 'filtered' && (
                             <span className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded">
-                              🏷️ {topics.split('\n').map((t) => t.trim()).filter((t) => t && !t.startsWith('#')).length} topics
+                              🏷️{' '}
+                              {
+                                topics
+                                  .split('\n')
+                                  .map((t) => t.trim())
+                                  .filter((t) => t && !t.startsWith('#')).length
+                              }{' '}
+                              topics
                             </span>
                           )}
                         </div>
@@ -3330,7 +3474,13 @@ export function Ingest() {
                     <button
                       type="button"
                       onClick={() => handleGetOpenAlexCount('keyword')}
-                      disabled={checkingCount || checkingTopics || downloadingSample || !keywords.trim() || queryValid === false}
+                      disabled={
+                        checkingCount ||
+                        checkingTopics ||
+                        downloadingSample ||
+                        !keywords.trim() ||
+                        queryValid === false
+                      }
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 border rounded font-mono text-xs font-bold uppercase bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 cursor-pointer transition select-none shadow-sm"
                       title="Run keyword-only search without topic filters (openalex search)"
                     >
@@ -3345,7 +3495,13 @@ export function Ingest() {
                     <button
                       type="button"
                       onClick={() => handleGetOpenAlexCount('filtered')}
-                      disabled={checkingCount || checkingTopics || downloadingSample || !keywords.trim() || queryValid === false}
+                      disabled={
+                        checkingCount ||
+                        checkingTopics ||
+                        downloadingSample ||
+                        !keywords.trim() ||
+                        queryValid === false
+                      }
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 border rounded font-mono text-xs font-bold uppercase bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-850 disabled:opacity-50 cursor-pointer transition select-none shadow-sm"
                       title="Run search with keywords AND topics filter (openalex search-filtered)"
                     >
@@ -3362,7 +3518,13 @@ export function Ingest() {
                     <button
                       type="button"
                       onClick={handleDownloadSample}
-                      disabled={checkingCount || checkingTopics || downloadingSample || !keywords.trim() || queryValid === false}
+                      disabled={
+                        checkingCount ||
+                        checkingTopics ||
+                        downloadingSample ||
+                        !keywords.trim() ||
+                        queryValid === false
+                      }
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border rounded font-mono text-xs font-bold uppercase bg-zinc-50 dark:bg-zinc-900/60 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 cursor-pointer transition select-none"
                       title="Download a random sample of matching works as CSV (openalex sample)"
                     >
@@ -3377,7 +3539,15 @@ export function Ingest() {
                     <button
                       type="button"
                       onClick={handleOpenDownloadPreflight}
-                      disabled={checkingCount || checkingTopics || downloadingSample || syncing || fetchingDownloadInfo || !keywords.trim() || queryValid === false}
+                      disabled={
+                        checkingCount ||
+                        checkingTopics ||
+                        downloadingSample ||
+                        syncing ||
+                        fetchingDownloadInfo ||
+                        !keywords.trim() ||
+                        queryValid === false
+                      }
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border rounded font-mono text-xs font-bold uppercase bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-800 dark:border-zinc-200 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 cursor-pointer transition select-none shadow-sm"
                       title="Download all matching papers to JSONL (openalex download)"
                     >
@@ -3401,7 +3571,8 @@ export function Ingest() {
                     Topic Grouping & Distribution Analysis
                   </span>
                   <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                    Fetch sorted counts of the top 200 research topics matching keywords. Concurrent API requests resolve full names/descriptions.
+                    Fetch sorted counts of the top 200 research topics matching keywords. Concurrent
+                    API requests resolve full names/descriptions.
                   </p>
 
                   {/* Topics summaries badge */}
@@ -3427,7 +3598,11 @@ export function Ingest() {
                           </span>
                         </div>
                         <span className="text-[10px] font-sans text-zinc-400">
-                          Mapped across <span className="font-semibold text-zinc-700 dark:text-zinc-300">{openalexTopicsTotalPapers?.toLocaleString()}</span> papers.
+                          Mapped across{' '}
+                          <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                            {openalexTopicsTotalPapers?.toLocaleString()}
+                          </span>{' '}
+                          papers.
                         </span>
                       </div>
                     ) : (
@@ -3471,7 +3646,8 @@ export function Ingest() {
                     Ingestion Pipeline & Sync Diagnostics
                   </h3>
                   <p className="text-[11px] text-zinc-400 font-sans">
-                    Execute the OpenAlex ingestion pipeline for the active configuration, download publications, and populate the DuckDB database.
+                    Execute the OpenAlex ingestion pipeline for the active configuration, download
+                    publications, and populate the DuckDB database.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -3551,7 +3727,9 @@ export function Ingest() {
                     {pipelineProgress >= 100 && (
                       <div className="text-emerald-400 font-bold flex items-center gap-1.5 mt-1">
                         <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span>[SUCCESS] Database sync completed successfully. All services ready.</span>
+                        <span>
+                          [SUCCESS] Database sync completed successfully. All services ready.
+                        </span>
                       </div>
                     )}
                   </>
@@ -3609,45 +3787,58 @@ export function Ingest() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                          {openalexTopics.slice(0, showAllTopics ? openalexTopics.length : 10).map((topic) => (
-                            <tr key={topic.topic_id} className="hover:bg-zinc-50/55 dark:hover:bg-zinc-900/10">
-                              <td className="p-3 text-center w-16">
-                                <input
-                                  type="checkbox"
-                                  checked={isTopicSelected(topic.topic_id)}
-                                  onChange={(e) => handleToggleTopic(topic.topic_id, e.target.checked)}
-                                  className="rounded border-zinc-300 text-zinc-900 focus:ring-0 cursor-pointer"
-                                />
-                              </td>
-                              <td className="p-3 font-mono text-[11px]">
-                                <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-800 dark:text-zinc-300 font-semibold border border-zinc-200/50 dark:border-zinc-800">
-                                  {topic.topic_id}
-                                </span>
-                              </td>
-                              <td className="p-3 font-medium text-zinc-900 dark:text-zinc-100 max-w-[200px] truncate font-semibold" title={topic.display_name}>
-                                {topic.display_name}
-                              </td>
-                              <td className="p-3 text-zinc-400 dark:text-zinc-500 max-w-xs truncate" title={topic.description}>
-                                {topic.description || '—'}
-                              </td>
-                              <td className="p-3 text-right font-mono font-medium text-zinc-950 dark:text-zinc-50">
-                                {topic.paper_count.toLocaleString()}
-                              </td>
-                              <td className="p-3">
-                                <div className="flex items-center justify-end gap-3 w-full">
-                                  <div className="w-20 bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden shrink-0">
-                                    <div
-                                      className="bg-zinc-900 dark:bg-zinc-100 h-full rounded-full"
-                                      style={{ width: `${topic.percentage}%` }}
-                                    />
-                                  </div>
-                                  <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400 w-12 text-right">
-                                    {topic.percentage.toFixed(2)}%
+                          {openalexTopics
+                            .slice(0, showAllTopics ? openalexTopics.length : 10)
+                            .map((topic) => (
+                              <tr
+                                key={topic.topic_id}
+                                className="hover:bg-zinc-50/55 dark:hover:bg-zinc-900/10"
+                              >
+                                <td className="p-3 text-center w-16">
+                                  <input
+                                    type="checkbox"
+                                    checked={isTopicSelected(topic.topic_id)}
+                                    onChange={(e) =>
+                                      handleToggleTopic(topic.topic_id, e.target.checked)
+                                    }
+                                    className="rounded border-zinc-300 text-zinc-900 focus:ring-0 cursor-pointer"
+                                  />
+                                </td>
+                                <td className="p-3 font-mono text-[11px]">
+                                  <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-800 dark:text-zinc-300 font-semibold border border-zinc-200/50 dark:border-zinc-800">
+                                    {topic.topic_id}
                                   </span>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+                                <td
+                                  className="p-3 font-medium text-zinc-900 dark:text-zinc-100 max-w-[200px] truncate font-semibold"
+                                  title={topic.display_name}
+                                >
+                                  {topic.display_name}
+                                </td>
+                                <td
+                                  className="p-3 text-zinc-400 dark:text-zinc-500 max-w-xs truncate"
+                                  title={topic.description}
+                                >
+                                  {topic.description || '—'}
+                                </td>
+                                <td className="p-3 text-right font-mono font-medium text-zinc-950 dark:text-zinc-50">
+                                  {topic.paper_count.toLocaleString()}
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-end gap-3 w-full">
+                                    <div className="w-20 bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden shrink-0">
+                                      <div
+                                        className="bg-zinc-900 dark:bg-zinc-100 h-full rounded-full"
+                                        style={{ width: `${topic.percentage}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono text-[11px] text-zinc-600 dark:text-zinc-400 w-12 text-right">
+                                      {topic.percentage.toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
                         </tbody>
                       </table>
                     </div>
@@ -3658,7 +3849,9 @@ export function Ingest() {
                         onClick={() => setShowAllTopics(!showAllTopics)}
                         className="mx-auto mt-2 px-4 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 rounded font-mono text-[10px] uppercase font-bold text-zinc-600 dark:text-zinc-400 cursor-pointer"
                       >
-                        {showAllTopics ? 'Show Less (Top 10)' : `Show All ${openalexTopics.length} Topics`}
+                        {showAllTopics
+                          ? 'Show Less (Top 10)'
+                          : `Show All ${openalexTopics.length} Topics`}
                       </button>
                     )}
                   </div>
@@ -3688,7 +3881,10 @@ export function Ingest() {
                 </div>
 
                 <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                  Recover missing <code className="font-mono text-zinc-700 dark:text-zinc-300">country_code</code> values directly in OpenAlex JSONL publication records before database conversion, using ROR lookups and raw affiliation string heuristics.
+                  Recover missing{' '}
+                  <code className="font-mono text-zinc-700 dark:text-zinc-300">country_code</code>{' '}
+                  values directly in OpenAlex JSONL publication records before database conversion,
+                  using ROR lookups and raw affiliation string heuristics.
                 </p>
 
                 {/* Input JSONL File */}
@@ -3705,7 +3901,9 @@ export function Ingest() {
                       className="text-[10px] font-mono text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center gap-1 cursor-pointer transition"
                       title="Re-scan StratumProjects directory"
                     >
-                      <RefreshCw className={`h-2.5 w-2.5 ${loadingImputeFiles ? 'animate-spin' : ''}`} />
+                      <RefreshCw
+                        className={`h-2.5 w-2.5 ${loadingImputeFiles ? 'animate-spin' : ''}`}
+                      />
                       <span>Refresh List</span>
                     </button>
                   </div>
@@ -3734,7 +3932,10 @@ export function Ingest() {
 
                   <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
                     <span className="truncate">
-                      Location: <strong className="text-zinc-700 dark:text-zinc-300">StratumProjects/{activeProject}/data/jsonl/{selectedImputeFile}</strong>
+                      Location:{' '}
+                      <strong className="text-zinc-700 dark:text-zinc-300">
+                        StratumProjects/{activeProject}/data/jsonl/{selectedImputeFile}
+                      </strong>
                     </span>
                     {imputeFiles.find((f) => f.name === selectedImputeFile) && (
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0 ml-2">
@@ -3761,12 +3962,20 @@ export function Ingest() {
                       value={imputeOutputPath}
                       onChange={(e) => setImputeOutputPath(e.target.value)}
                       disabled={imputeRunning}
-                      placeholder={selectedImputeFile ? `${selectedImputeFile.replace(/(_imputed)?\.jsonl$/i, '')}_imputed.jsonl` : `${activeProject || 'collected_papers'}_imputed.jsonl`}
+                      placeholder={
+                        selectedImputeFile
+                          ? `${selectedImputeFile.replace(/(_imputed)?\.jsonl$/i, '')}_imputed.jsonl`
+                          : `${activeProject || 'collected_papers'}_imputed.jsonl`
+                      }
                       className="w-full font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 font-medium"
                     />
                   </div>
                   <span className="text-[10px] font-mono text-zinc-400">
-                    Destination: StratumProjects/{activeProject || '...'}/data/jsonl/{imputeOutputPath || (selectedImputeFile ? `${selectedImputeFile.replace(/(_imputed)?\.jsonl$/i, '')}_imputed.jsonl` : `${activeProject || 'collected_papers'}_imputed.jsonl`)}
+                    Destination: StratumProjects/{activeProject || '...'}/data/jsonl/
+                    {imputeOutputPath ||
+                      (selectedImputeFile
+                        ? `${selectedImputeFile.replace(/(_imputed)?\.jsonl$/i, '')}_imputed.jsonl`
+                        : `${activeProject || 'collected_papers'}_imputed.jsonl`)}
                   </span>
                 </div>
 
@@ -3834,46 +4043,78 @@ export function Ingest() {
                 </div>
 
                 <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                  The imputation tool evaluates each institution record against a four-stage sequential pipeline to resolve ambiguous or missing country affiliations:
+                  The imputation tool evaluates each institution record against a four-stage
+                  sequential pipeline to resolve ambiguous or missing country affiliations:
                 </p>
 
                 <div className="flex flex-col gap-2.5 font-sans text-xs">
                   <div className="flex items-start gap-3 p-2.5 rounded border border-zinc-200/60 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30">
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">01</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      01
+                    </span>
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">Preserve Existing OpenAlex Codes</span>
-                      <span className="text-[11px] text-zinc-400">Valid ISO-2 country codes already populated by OpenAlex are standardized and retained intact.</span>
+                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">
+                        Preserve Existing OpenAlex Codes
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Valid ISO-2 country codes already populated by OpenAlex are standardized and
+                        retained intact.
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-2.5 rounded border border-zinc-200/60 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30">
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">02</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      02
+                    </span>
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">ROR Registry Lookup</span>
-                      <span className="text-[11px] text-zinc-400">If the institution has an ROR identifier, queries <code className="font-mono">api.ror.org</code> to retrieve authoritative country data.</span>
+                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">
+                        ROR Registry Lookup
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        If the institution has an ROR identifier, queries{' '}
+                        <code className="font-mono">api.ror.org</code> to retrieve authoritative
+                        country data.
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-2.5 rounded border border-zinc-200/60 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30">
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">03</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      03
+                    </span>
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">Affiliation String Regex Heuristic</span>
-                      <span className="text-[11px] text-zinc-400">Extracts ISO-2 country codes from raw affiliation strings matching country names, common aliases, US states, and Indian states/UTs.</span>
+                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">
+                        Affiliation String Regex Heuristic
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Extracts ISO-2 country codes from raw affiliation strings matching country
+                        names, common aliases, US states, and Indian states/UTs.
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-2.5 rounded border border-zinc-200/60 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30">
-                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">04</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-mono font-bold text-zinc-700 dark:text-zinc-300 shrink-0">
+                      04
+                    </span>
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">Institution Display Name Inspection</span>
-                      <span className="text-[11px] text-zinc-400">Fallback scanner inspects institution name tokens for explicit national/regional markers.</span>
+                      <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200 text-xs">
+                        Institution Display Name Inspection
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Fallback scanner inspects institution name tokens for explicit
+                        national/regional markers.
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-auto pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] font-mono text-zinc-400">
                   <span>Non-destructive processing</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">100% Raw Data Safe</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                    100% Raw Data Safe
+                  </span>
                 </div>
               </div>
             </div>
@@ -3887,7 +4128,11 @@ export function Ingest() {
                     Country Imputation Diagnostics Console
                   </h3>
                   <p className="text-[11px] text-zinc-400 font-sans">
-                    Real-time execution logs, institution resolution rates, and output metrics from <code className="font-mono text-zinc-700 dark:text-zinc-300">openalex impute-country</code>.
+                    Real-time execution logs, institution resolution rates, and output metrics from{' '}
+                    <code className="font-mono text-zinc-700 dark:text-zinc-300">
+                      openalex impute-country
+                    </code>
+                    .
                   </p>
                 </div>
 
@@ -3915,7 +4160,13 @@ export function Ingest() {
                             : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
                     }`}
                   >
-                    {imputeRunning ? 'RUNNING' : imputeError ? 'ERROR' : imputeLogs.length > 0 ? 'COMPLETED' : 'IDLE'}
+                    {imputeRunning
+                      ? 'RUNNING'
+                      : imputeError
+                        ? 'ERROR'
+                        : imputeLogs.length > 0
+                          ? 'COMPLETED'
+                          : 'IDLE'}
                   </span>
                 </div>
               </div>
@@ -3924,25 +4175,35 @@ export function Ingest() {
               {Object.keys(imputeStats).length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-zinc-50/60 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded font-mono">
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">Records Processed</span>
+                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">
+                      Records Processed
+                    </span>
                     <span className="text-base font-bold text-zinc-900 dark:text-zinc-100">
                       {imputeStats['JSON records processed'] || '—'}
                     </span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">Institutions Imputed</span>
+                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">
+                      Institutions Imputed
+                    </span>
                     <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                      {imputeStats['Institutions country imputed'] || imputeStats['Country imputed'] || '—'}
+                      {imputeStats['Institutions country imputed'] ||
+                        imputeStats['Country imputed'] ||
+                        '—'}
                     </span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">Already Had Country</span>
+                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">
+                      Already Had Country
+                    </span>
                     <span className="text-base font-bold text-zinc-700 dark:text-zinc-300">
                       {imputeStats['Already had country'] || '—'}
                     </span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">Processing Time</span>
+                    <span className="text-[9px] text-zinc-400 uppercase tracking-wider">
+                      Processing Time
+                    </span>
                     <span className="text-base font-bold text-zinc-700 dark:text-zinc-300">
                       {imputeStats['Processing time'] || '—'}
                     </span>
@@ -3985,7 +4246,14 @@ export function Ingest() {
               {/* Console Footer */}
               <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-1">
                 <span>
-                  Output file destination: <strong className="text-zinc-600 dark:text-zinc-300">StratumProjects/{activeProject}/data/jsonl/{imputeOutputPath || (selectedImputeFile ? `${selectedImputeFile.replace(/\.jsonl$/i, '')}_imputed.jsonl` : '...')}</strong>
+                  Output file destination:{' '}
+                  <strong className="text-zinc-600 dark:text-zinc-300">
+                    StratumProjects/{activeProject}/data/jsonl/
+                    {imputeOutputPath ||
+                      (selectedImputeFile
+                        ? `${selectedImputeFile.replace(/\.jsonl$/i, '')}_imputed.jsonl`
+                        : '...')}
+                  </strong>
                 </span>
                 {imputeLogs.length > 0 && !imputeRunning && (
                   <button
@@ -4031,8 +4299,8 @@ export function Ingest() {
                       className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded font-mono text-xs focus:outline-none"
                     />
                     <span className="text-[9px] text-zinc-400 font-sans leading-normal">
-                      If multiple keys are set, Stratum rotates queries across them and automatically
-                      sets aside keys that encounter quota exceptions.
+                      If multiple keys are set, Stratum rotates queries across them and
+                      automatically sets aside keys that encounter quota exceptions.
                     </span>
                   </div>
 
@@ -4048,8 +4316,8 @@ export function Ingest() {
                       className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2.5 rounded font-mono text-xs focus:outline-none"
                     />
                     <span className="text-[9px] text-zinc-400 font-sans leading-normal">
-                      OpenAlex reserves a dedicated "polite pool" with faster response times for users
-                      who send their contact email in the headers.
+                      OpenAlex reserves a dedicated "polite pool" with faster response times for
+                      users who send their contact email in the headers.
                     </span>
                   </div>
                 </div>
@@ -4082,7 +4350,9 @@ export function Ingest() {
                 </div>
 
                 <p className="text-[11px] text-zinc-400 font-sans leading-relaxed">
-                  Receive browser push alerts when long-running search calculations, topic details fetches, or pipeline syncs finish, so you are immediately notified even when working in other tabs.
+                  Receive browser push alerts when long-running search calculations, topic details
+                  fetches, or pipeline syncs finish, so you are immediately notified even when
+                  working in other tabs.
                 </p>
 
                 <div className="flex flex-col gap-3 mt-1">
@@ -4100,11 +4370,17 @@ export function Ingest() {
                   {notificationPermission === 'granted' && (
                     <div className="flex flex-col gap-3">
                       <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold">
-                        <Check className="h-3.5 w-3.5 shrink-0" /> Desktop notifications are fully configured and ready.
+                        <Check className="h-3.5 w-3.5 shrink-0" /> Desktop notifications are fully
+                        configured and ready.
                       </span>
                       <button
                         type="button"
-                        onClick={() => sendNotification('Stratum Notification', 'Desktop notifications are working properly!')}
+                        onClick={() =>
+                          sendNotification(
+                            'Stratum Notification',
+                            'Desktop notifications are working properly!',
+                          )
+                        }
                         className="self-start px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 rounded font-mono text-[10px] font-bold uppercase hover:bg-zinc-50 dark:hover:bg-zinc-850 text-zinc-600 dark:text-zinc-400 cursor-pointer transition"
                       >
                         Send Test Notification
@@ -4114,7 +4390,8 @@ export function Ingest() {
 
                   {notificationPermission === 'denied' && (
                     <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 flex items-center gap-1.5 leading-normal">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Notifications are blocked. Please enable them in your browser site settings to receive completion alerts.
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Notifications are blocked.
+                      Please enable them in your browser site settings to receive completion alerts.
                     </span>
                   )}
                 </div>
@@ -4253,7 +4530,9 @@ export function Ingest() {
                           }}
                           className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2 rounded font-mono text-xs focus:outline-none"
                         >
-                          <option value="gemini-3.6-flash">Gemini 3.6 Flash (Fastest & Recommended)</option>
+                          <option value="gemini-3.6-flash">
+                            Gemini 3.6 Flash (Fastest & Recommended)
+                          </option>
                           <option value="gemini-3.6-pro">Gemini 3.6 Pro (Deep Reasoning)</option>
                           <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                           <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
@@ -4275,7 +4554,8 @@ export function Ingest() {
                           className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-2 rounded font-mono text-xs focus:outline-none"
                         />
                         <span className="text-[9px] text-zinc-400 font-sans">
-                          Used to classify extracted keywords into the 4-bucket bounded boolean schema.
+                          Used to classify extracted keywords into the 4-bucket bounded boolean
+                          schema.
                         </span>
                       </div>
                     </>
@@ -4339,12 +4619,16 @@ export function Ingest() {
                 <div className="flex flex-col gap-3 text-xs font-mono text-zinc-500">
                   <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-900">
                     <span>Active Workspace</span>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200">{activeProject || 'Default'}</span>
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                      {activeProject || 'Default'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-b border-zinc-100 dark:border-zinc-900">
                     <span>Browser Notification Support</span>
                     <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                      {typeof window !== 'undefined' && 'Notification' in window ? 'Supported' : 'Unavailable'}
+                      {typeof window !== 'undefined' && 'Notification' in window
+                        ? 'Supported'
+                        : 'Unavailable'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2">
@@ -4418,7 +4702,11 @@ export function Ingest() {
                 e.preventDefault()
                 const size = parseInt(sampleSizeInput.trim(), 10)
                 if (isNaN(size) || size <= 0) {
-                  triggerAlert('error', 'Invalid Sample Size', 'Please enter a valid positive number.')
+                  triggerAlert(
+                    'error',
+                    'Invalid Sample Size',
+                    'Please enter a valid positive number.',
+                  )
                   return
                 }
                 setSampleModalConfig(null)
@@ -4427,7 +4715,8 @@ export function Ingest() {
               className="p-5 flex flex-col gap-4"
             >
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-sans">
-                Specify the number of papers to retrieve as a random sample. The active keywords, date filters, and topics will be applied.
+                Specify the number of papers to retrieve as a random sample. The active keywords,
+                date filters, and topics will be applied.
               </p>
 
               <div className="flex flex-col gap-1.5">
@@ -4495,13 +4784,16 @@ export function Ingest() {
             {/* Modal Body */}
             <div className="p-5 flex flex-col gap-4">
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-sans">
-                Review estimated harvest metrics and output configuration before initiating async download of OpenAlex publication records.
+                Review estimated harvest metrics and output configuration before initiating async
+                download of OpenAlex publication records.
               </p>
 
               {/* Pre-flight Metrics Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="border border-zinc-200 dark:border-zinc-800 rounded p-3 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-1">
-                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">Total Papers</span>
+                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">
+                    Total Papers
+                  </span>
                   <span className="font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
                     {downloadInfo.total.toLocaleString()}
                   </span>
@@ -4509,7 +4801,9 @@ export function Ingest() {
                 </div>
 
                 <div className="border border-zinc-200 dark:border-zinc-800 rounded p-3 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-1">
-                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">Est. Size</span>
+                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">
+                    Est. Size
+                  </span>
                   <span className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
                     ~{downloadInfo.estimated_mb.toFixed(0)} MB
                   </span>
@@ -4517,7 +4811,9 @@ export function Ingest() {
                 </div>
 
                 <div className="border border-zinc-200 dark:border-zinc-800 rounded p-3 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-1">
-                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">Filter Scope</span>
+                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">
+                    Filter Scope
+                  </span>
                   <span className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
                     {downloadNoTopics ? '0 Topics' : `${downloadInfo.topics_count} Topics`}
                   </span>
@@ -4527,7 +4823,9 @@ export function Ingest() {
                 </div>
 
                 <div className="border border-zinc-200 dark:border-zinc-800 rounded p-3 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-1">
-                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">Free Storage</span>
+                  <span className="text-[9px] font-mono uppercase font-bold text-zinc-400">
+                    Free Storage
+                  </span>
                   <span className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">
                     {downloadInfo.free_space_gb.toFixed(1)} GB
                   </span>
@@ -4536,13 +4834,14 @@ export function Ingest() {
               </div>
 
               {/* Low Disk Space Alert */}
-              {downloadInfo.free_space_gb < (downloadInfo.estimated_mb * 2 / 1024) && (
+              {downloadInfo.free_space_gb < (downloadInfo.estimated_mb * 2) / 1024 && (
                 <div className="flex items-start gap-2 p-3 rounded border border-amber-300 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 text-xs">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold">Low disk space warning: </span>
                     <span>
-                      {downloadInfo.free_space_gb.toFixed(1)} GB free, recommended ~{(downloadInfo.estimated_mb * 2 / 1024).toFixed(1)} GB (2× estimated size).
+                      {downloadInfo.free_space_gb.toFixed(1)} GB free, recommended ~
+                      {((downloadInfo.estimated_mb * 2) / 1024).toFixed(1)} GB (2× estimated size).
                     </span>
                   </div>
                 </div>
@@ -4618,7 +4917,11 @@ export function Ingest() {
                   </button>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-400">
-                  Destination: <span className="text-zinc-600 dark:text-zinc-300">StratumProjects/{activeProject}/data/jsonl/{downloadOutputFilename || defaultJsonlName}</span>
+                  Destination:{' '}
+                  <span className="text-zinc-600 dark:text-zinc-300">
+                    StratumProjects/{activeProject}/data/jsonl/
+                    {downloadOutputFilename || defaultJsonlName}
+                  </span>
                 </span>
               </div>
 
@@ -4651,7 +4954,10 @@ export function Ingest() {
                   <div>
                     <span className="font-bold">Resume checkpoint detected: </span>
                     <span>
-                      Found {downloadInfo.existing_papers.toLocaleString()} existing papers in <span className="font-mono">{downloadOutputFilename}</span> with an active <span className="font-mono">.download_progress.json</span> sidecar. The download will resume from saved cursor positions without duplicates.
+                      Found {downloadInfo.existing_papers.toLocaleString()} existing papers in{' '}
+                      <span className="font-mono">{downloadOutputFilename}</span> with an active{' '}
+                      <span className="font-mono">.download_progress.json</span> sidecar. The
+                      download will resume from saved cursor positions without duplicates.
                     </span>
                   </div>
                 </div>
@@ -4664,7 +4970,10 @@ export function Ingest() {
                     <div>
                       <span className="font-bold">Existing file without resume tracking: </span>
                       <span>
-                        <span className="font-mono">{downloadOutputFilename}</span> contains {downloadInfo.existing_papers.toLocaleString()} papers, but no cursor progress sidecar was found. Appending without cursor tracking will create duplicate records.
+                        <span className="font-mono">{downloadOutputFilename}</span> contains{' '}
+                        {downloadInfo.existing_papers.toLocaleString()} papers, but no cursor
+                        progress sidecar was found. Appending without cursor tracking will create
+                        duplicate records.
                       </span>
                     </div>
                   </div>
@@ -4676,7 +4985,9 @@ export function Ingest() {
                       onChange={(e) => setDownloadOverwrite(e.target.checked)}
                       className="rounded border-zinc-300 dark:border-zinc-700 text-zinc-900 focus:ring-0"
                     />
-                    <span>Overwrite: Delete existing file and start fresh download (Recommended)</span>
+                    <span>
+                      Overwrite: Delete existing file and start fresh download (Recommended)
+                    </span>
                   </label>
                 </div>
               )}
@@ -4685,7 +4996,11 @@ export function Ingest() {
             {/* Modal Footer */}
             <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-850 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
               <span className="text-[10px] font-mono text-zinc-400">
-                Command: <span className="text-zinc-600 dark:text-zinc-300">openalex download {downloadNoTopics ? '--no-topics ' : ''}-o {downloadOutputFilename}</span>
+                Command:{' '}
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  openalex download {downloadNoTopics ? '--no-topics ' : ''}-o{' '}
+                  {downloadOutputFilename}
+                </span>
               </span>
 
               <div className="flex items-center gap-2">
@@ -4758,7 +5073,8 @@ export function Ingest() {
               className="p-5 flex flex-col gap-4"
             >
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-sans">
-                Stratum uses Gemini or Ollama to automatically classify extracted keywords into the 4 bibliometric categories and compile a bounded Boolean query.
+                Stratum uses Gemini or Ollama to automatically classify extracted keywords into the
+                4 bibliometric categories and compile a bounded Boolean query.
               </p>
 
               <div className="flex flex-col gap-1">
