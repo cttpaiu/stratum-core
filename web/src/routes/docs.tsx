@@ -49,16 +49,17 @@ export function Docs() {
               fallback to bypass parser column shifts and retrieve all DOIs successfully.
             </li>
             <li>
-              <strong>Dual-Stage Keyword Mining (TF-IDF + KeyBERT)</strong>: Extracts candidate pool terms
-              (default: 20) using TF-IDF across local papers, followed by dense semantic re-ranking
-              via KeyBERT with the <code>allenai-specter</code> embedding model (default blend α=0.1).
-              Displays decomposed scores (<code>tf:</code>, <code>KB:</code>, and blended <code>c:</code>).
+              <strong>Dual-Stage Keyword Mining (TF-IDF + KeyBERT)</strong>: Extracts candidate pool
+              terms (default: 20) using TF-IDF across local papers, followed by dense semantic
+              re-ranking via KeyBERT with the <code>allenai-specter</code> embedding model (default
+              blend α=0.1). Displays decomposed scores (<code>tf:</code>, <code>KB:</code>, and
+              blended <code>c:</code>).
             </li>
             <li>
               <strong>DuckDB Analytics & JSONL Ingestion</strong>: Downloads raw OpenAlex works to
-              JSONL, enabling instant direct SQL querying via <code>read_json_auto()</code> or one-click
-              normalization into relational DuckDB tables (<code>papers</code>, <code>contributions</code>, etc.)
-              via <code>POST /api/db/import-jsonl</code>.
+              JSONL, enabling instant direct SQL querying via <code>read_json_auto()</code> or
+              one-click normalization into relational DuckDB tables (<code>papers</code>,{' '}
+              <code>contributions</code>, etc.) via <code>POST /api/db/import-jsonl</code>.
             </li>
           </ol>
 
@@ -87,8 +88,10 @@ export function Docs() {
               Affiliation & Country Imputation Engine
             </h2>
             <p className="text-zinc-600 dark:text-zinc-400">
-              Stratum implements a two-tier imputation architecture to resolve missing institutional and country affiliations:
-              a high-throughput <strong>Pre-Ingestion JSONL Cascade</strong> running before database conversion, and an
+              Stratum implements a two-tier imputation architecture to resolve missing institutional
+              and country affiliations: a high-throughput{' '}
+              <strong>Pre-Ingestion JSONL Cascade</strong> running before database conversion, and
+              an
               <strong>In-Database Metadata Restoration Engine</strong> operating directly on DuckDB.
             </p>
           </div>
@@ -97,60 +100,100 @@ export function Docs() {
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-1.5">
               <h3 className="font-mono font-bold uppercase text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <span>1. Pre-Ingestion JSONL Cascade (<code>openalex impute-country</code>)</span>
+                <span>
+                  1. Pre-Ingestion JSONL Cascade (<code>openalex impute-country</code>)
+                </span>
               </h3>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                 100% Non-Destructive
               </span>
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-              Executes directly over raw OpenAlex publication records in <code>.jsonl</code> format before DuckDB import. The source JSONL file is never modified; results are written to an isolated <code>&lt;file&gt;_imputed.jsonl</code>. Each authorship passes through a 4-stage sequential heuristic cascade:
+              Executes directly over raw OpenAlex publication records in <code>.jsonl</code> format
+              before DuckDB import. The source JSONL file is never modified; results are written to
+              an isolated <code>&lt;file&gt;_imputed.jsonl</code>. Each authorship passes through a
+              4-stage sequential heuristic cascade:
             </p>
 
             <div className="grid grid-cols-1 gap-2.5 mt-1 font-sans">
               <div className="p-3 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1">
                 <div className="flex items-center gap-2 font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">Stage 01</span>
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">
+                    Stage 01
+                  </span>
                   <span>Preserve Existing OpenAlex Codes</span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 pl-7">
-                  Valid ISO-2 and ISO-3 country codes already populated by OpenAlex in <code>institution.country_code</code> or <code>authorship.countries</code> are standardized and preserved intact without redundant remote lookups.
+                  Valid ISO-2 and ISO-3 country codes already populated by OpenAlex in{' '}
+                  <code>institution.country_code</code> or <code>authorship.countries</code> are
+                  standardized and preserved intact without redundant remote lookups.
                 </p>
               </div>
 
               <div className="p-3 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1">
                 <div className="flex items-center gap-2 font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">Stage 02</span>
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">
+                    Stage 02
+                  </span>
                   <span>Authoritative ROR Registry Lookup</span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 pl-7">
-                  For institutions with an ROR identifier (<code>ror_id</code>) missing a country code, the engine queries <code>api.ror.org/v2/organizations/&#123;ror_id&#125;</code>. Uses exact ID matching with rate limiting (0.15s delay) and memoized in-memory caching to prevent API throttling and eliminate entity drift.
+                  For institutions with an ROR identifier (<code>ror_id</code>) missing a country
+                  code, the engine queries{' '}
+                  <code>api.ror.org/v2/organizations/&#123;ror_id&#125;</code>. Uses exact ID
+                  matching with rate limiting (0.15s delay) and memoized in-memory caching to
+                  prevent API throttling and eliminate entity drift.
                 </p>
               </div>
 
               <div className="p-3 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1">
                 <div className="flex items-center gap-2 font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">Stage 03</span>
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">
+                    Stage 03
+                  </span>
                   <span>Affiliation String Regex & Gazetteer Heuristics</span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 pl-7">
-                  Scans raw affiliation strings (<code>raw_affiliation_strings</code>) using word-boundary regular expressions against hierarchical gazetteers in strict precedence:
+                  Scans raw affiliation strings (<code>raw_affiliation_strings</code>) using
+                  word-boundary regular expressions against hierarchical gazetteers in strict
+                  precedence:
                 </p>
                 <ul className="list-disc pl-12 text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-col gap-1 mt-1 font-sans">
-                  <li><strong>Country Names & Aliases</strong>: Sorted longest phrase first (e.g., "People's Republic of China", "United States of America", "South Korea", "Great Britain") to prevent substring collisions.</li>
-                  <li><strong>Indian States & Union Territories</strong>: Matches all 36 Indian states and UTs (e.g., "Karnataka", "Tamil Nadu", "Maharashtra", "Delhi", "Telangana") &rarr; <code>IN</code>.</li>
-                  <li><strong>US States & Territories</strong>: Matches all 50 US states, DC, and territories (e.g., "California", "Massachusetts", "Puerto Rico") &rarr; <code>US</code>.</li>
-                  <li><strong>US State Abbreviations</strong>: Strictly delimited by punctuation and word boundaries (e.g., <code>, CA,</code>, <code>(MA)</code>, <code> TX </code>) &rarr; <code>US</code> to eliminate spurious two-letter false positives.</li>
+                  <li>
+                    <strong>Country Names & Aliases</strong>: Sorted longest phrase first (e.g.,
+                    "People's Republic of China", "United States of America", "South Korea", "Great
+                    Britain") to prevent substring collisions.
+                  </li>
+                  <li>
+                    <strong>Indian States & Union Territories</strong>: Matches all 36 Indian states
+                    and UTs (e.g., "Karnataka", "Tamil Nadu", "Maharashtra", "Delhi", "Telangana")
+                    &rarr; <code>IN</code>.
+                  </li>
+                  <li>
+                    <strong>US States & Territories</strong>: Matches all 50 US states, DC, and
+                    territories (e.g., "California", "Massachusetts", "Puerto Rico") &rarr;{' '}
+                    <code>US</code>.
+                  </li>
+                  <li>
+                    <strong>US State Abbreviations</strong>: Strictly delimited by punctuation and
+                    word boundaries (e.g., <code>, CA,</code>, <code>(MA)</code>, <code> TX </code>)
+                    &rarr; <code>US</code> to eliminate spurious two-letter false positives.
+                  </li>
                 </ul>
               </div>
 
               <div className="p-3 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 flex flex-col gap-1">
                 <div className="flex items-center gap-2 font-mono text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">Stage 04</span>
+                  <span className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px]">
+                    Stage 04
+                  </span>
                   <span>Institution Display Name Inspection</span>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 pl-7">
-                  When raw affiliation strings are absent or uninformative, a fallback scanner evaluates tokens within <code>institution.display_name</code> against national and regional entity markers (e.g., "Indian Institute of Science" &rarr; <code>IN</code>).
+                  When raw affiliation strings are absent or uninformative, a fallback scanner
+                  evaluates tokens within <code>institution.display_name</code> against national and
+                  regional entity markers (e.g., "Indian Institute of Science" &rarr;{' '}
+                  <code>IN</code>).
                 </p>
               </div>
             </div>
@@ -161,8 +204,12 @@ export function Docs() {
                 Dual Authorship Resolution Mechanics
               </span>
               <div className="text-zinc-600 dark:text-zinc-400 font-sans text-xs">
-                <strong>Authorship with Institution:</strong> Imputed country is injected directly into <code>institution.country_code</code>.<br />
-                <strong>Authorship without Institution:</strong> Inferred country is written into <code>authorship.countries = [country_code]</code>, enabling downstream JSONL &rarr; CSV &rarr; DuckDB loaders to populate the <code>contributions</code> table seamlessly.
+                <strong>Authorship with Institution:</strong> Imputed country is injected directly
+                into <code>institution.country_code</code>.<br />
+                <strong>Authorship without Institution:</strong> Inferred country is written into{' '}
+                <code>authorship.countries = [country_code]</code>, enabling downstream JSONL &rarr;
+                CSV &rarr; DuckDB loaders to populate the <code>contributions</code> table
+                seamlessly.
               </div>
             </div>
           </div>
@@ -173,17 +220,31 @@ export function Docs() {
               2. In-Database Metadata Restoration (<code>impute/impute.go</code>)
             </h3>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-              For papers already loaded into DuckDB that lack complete metadata, the Go engine executes deep post-ingestion enrichment:
+              For papers already loaded into DuckDB that lack complete metadata, the Go engine
+              executes deep post-ingestion enrichment:
             </p>
             <ul className="list-disc pl-5 flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
               <li>
-                <strong>Crossref DOI Resolution (<code>ImputeCrossRef</code>)</strong>: Queries Crossref works metadata using DOIs to restore missing author affiliation strings and ORCIDs.
+                <strong>
+                  Crossref DOI Resolution (<code>ImputeCrossRef</code>)
+                </strong>
+                : Queries Crossref works metadata using DOIs to restore missing author affiliation
+                strings and ORCIDs.
               </li>
               <li>
-                <strong>LLM Named Entity Extraction (<code>ImputeLLM</code>)</strong>: Submits unstructured affiliation strings to local Ollama (Llama 3, Mistral, Qwen) or Google Gemini API to extract normalized institution names and ISO-2 country codes.
+                <strong>
+                  LLM Named Entity Extraction (<code>ImputeLLM</code>)
+                </strong>
+                : Submits unstructured affiliation strings to local Ollama (Llama 3, Mistral, Qwen)
+                or Google Gemini API to extract normalized institution names and ISO-2 country
+                codes.
               </li>
               <li>
-                <strong>Full-Text PDF Extraction (<code>ImputePDF</code>)</strong>: For open-access preprints and papers (arXiv, Unpaywall), downloads PDF streams, parses first-page text objects, and extracts missing affiliations via LLM prompting.
+                <strong>
+                  Full-Text PDF Extraction (<code>ImputePDF</code>)
+                </strong>
+                : For open-access preprints and papers (arXiv, Unpaywall), downloads PDF streams,
+                parses first-page text objects, and extracts missing affiliations via LLM prompting.
               </li>
             </ul>
           </div>
@@ -197,20 +258,38 @@ export function Docs() {
               <div>
                 <span className="font-bold text-zinc-800 dark:text-zinc-200">CLI Command:</span>
                 <br />
-                <code>openalex impute-country &lt;input.jsonl&gt; [-o &lt;output.jsonl&gt;] [--limit N] [--ror/--no-ror]</code>
+                <code>
+                  openalex impute-country &lt;input.jsonl&gt; [-o &lt;output.jsonl&gt;] [--limit N]
+                  [--ror/--no-ror]
+                </code>
               </div>
               <div>
                 <span className="font-bold text-zinc-800 dark:text-zinc-200">REST Endpoints:</span>
                 <br />
-                <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/impute/run?project=&#123;slug&#125;</span> — Launches background country imputation job
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                  POST /api/impute/run?project=&#123;slug&#125;
+                </span>{' '}
+                — Launches background country imputation job
                 <br />
-                <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/impute/status?project=&#123;slug&#125;</span> — Streams live execution logs, progress %, and metrics
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                  GET /api/impute/status?project=&#123;slug&#125;
+                </span>{' '}
+                — Streams live execution logs, progress %, and metrics
                 <br />
-                <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/impute/cancel?project=&#123;slug&#125;</span> — Gracefully cancels ongoing imputation process
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                  POST /api/impute/cancel?project=&#123;slug&#125;
+                </span>{' '}
+                — Gracefully cancels ongoing imputation process
                 <br />
-                <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/impute/files?project=&#123;slug&#125;</span> — Scans project directory for raw and imputed JSONL files
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                  GET /api/impute/files?project=&#123;slug&#125;
+                </span>{' '}
+                — Scans project directory for raw and imputed JSONL files
                 <br />
-                <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/download/file?path=&#123;path&#125;</span> — Direct file download for resulting imputed JSONL
+                <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                  GET /api/download/file?path=&#123;path&#125;
+                </span>{' '}
+                — Direct file download for resulting imputed JSONL
               </div>
             </div>
           </div>
@@ -248,7 +327,12 @@ export function Docs() {
                     papers
                   </td>
                   <td className="p-2.5 border-r border-zinc-200 dark:border-zinc-800 text-[10px] break-all leading-normal max-w-md">
-                    id, doi, title, publication_year, publication_date, type, journal_name, journal_issn, is_core_journal, publisher, is_oa, oa_status, oa_url, cited_by_count, citation_percentile, is_top_1_percent, is_top_10_percent, fwci, primary_topic_id, primary_topic_name, primary_topic_score, primary_topic_field, primary_topic_subfield, primary_topic_domain, institutions_distinct_count, countries_distinct_count, is_international, abstract_text, updated_date
+                    id, doi, title, publication_year, publication_date, type, journal_name,
+                    journal_issn, is_core_journal, publisher, is_oa, oa_status, oa_url,
+                    cited_by_count, citation_percentile, is_top_1_percent, is_top_10_percent, fwci,
+                    primary_topic_id, primary_topic_name, primary_topic_score, primary_topic_field,
+                    primary_topic_subfield, primary_topic_domain, institutions_distinct_count,
+                    countries_distinct_count, is_international, abstract_text, updated_date
                   </td>
                   <td className="p-2.5">id (VARCHAR) PRIMARY KEY</td>
                 </tr>
@@ -284,7 +368,8 @@ export function Docs() {
                     contributions
                   </td>
                   <td className="p-2.5 border-r border-zinc-200 dark:border-zinc-800 text-[10px] break-all leading-normal max-w-md">
-                    row_id, paper_id, author_id, institution_id, country_code, author_name, author_position, is_corresponding, raw_affiliation_string
+                    row_id, paper_id, author_id, institution_id, country_code, author_name,
+                    author_position, is_corresponding, raw_affiliation_string
                   </td>
                   <td className="p-2.5">row_id (INTEGER) PRIMARY KEY</td>
                 </tr>
@@ -348,15 +433,20 @@ export function Docs() {
             </div>
             <div>
               <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/tfidf</span> —
-              Extracts TF-IDF candidate pool (default 20) with KeyBERT allenai-specter semantic re-ranking (α=0.1)
+              Extracts TF-IDF candidate pool (default 20) with KeyBERT allenai-specter semantic
+              re-ranking (α=0.1)
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/download-papers</span> —
-              Initiates background batch download of matching OpenAlex works to JSONL
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                POST /api/download-papers
+              </span>{' '}
+              — Initiates background batch download of matching OpenAlex works to JSONL
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/db/import-jsonl</span> —
-              Normalizes and loads downloaded JSONL papers into DuckDB relational tables
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                POST /api/db/import-jsonl
+              </span>{' '}
+              — Normalizes and loads downloaded JSONL papers into DuckDB relational tables
             </div>
             <div>
               <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/stats</span> —
@@ -372,23 +462,32 @@ export function Docs() {
             </div>
             <div>
               <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/query</span> —
-              Executes SQL queries against DuckDB relational tables or raw JSONL via read_json_auto()
+              Executes SQL queries against DuckDB relational tables or raw JSONL via
+              read_json_auto()
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/impute/run</span> —
-              Launches openalex impute-country cascade with ROR lookup and gazetteer heuristics
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                POST /api/impute/run
+              </span>{' '}
+              — Launches openalex impute-country cascade with ROR lookup and gazetteer heuristics
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/impute/status</span> —
-              Polls real-time country imputation progress, execution logs, and institution metrics
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                GET /api/impute/status
+              </span>{' '}
+              — Polls real-time country imputation progress, execution logs, and institution metrics
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">POST /api/impute/cancel</span> —
-              Gracefully terminates active country imputation background task
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                POST /api/impute/cancel
+              </span>{' '}
+              — Gracefully terminates active country imputation background task
             </div>
             <div>
-              <span className="text-zinc-900 dark:text-zinc-100 font-bold">GET /api/impute/files</span> —
-              Scans workspace for raw and imputed OpenAlex JSONL files
+              <span className="text-zinc-900 dark:text-zinc-100 font-bold">
+                GET /api/impute/files
+              </span>{' '}
+              — Scans workspace for raw and imputed OpenAlex JSONL files
             </div>
           </div>
         </div>

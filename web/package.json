@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
+    "postinstall": "node scripts/patch-html2canvas.cjs",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -22,7 +23,11 @@
     ]
   },
   "dependencies": {
+    "@amcharts/amcharts5": "^5.20.8",
+    "@amcharts/amcharts5-geodata": "^5.1.6",
     "@tanstack/react-router": "^1.170.15",
+    "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^2.4.5",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.17.0",

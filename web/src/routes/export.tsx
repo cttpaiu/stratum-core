@@ -114,8 +114,8 @@ interface Toast {
 export function Export() {
   const { activeProject } = useProject()
 
-  // 1. Operational Mode
-  const [mode, setMode] = useState<ExportMode>('pipeline')
+  // 1. Operational Mode (always follows full pipeline)
+  const mode: ExportMode = 'pipeline'
 
   // 2. File State
   const [filesData, setFilesData] = useState<ExportFilesResponse>({
@@ -131,15 +131,14 @@ export function Export() {
   // Form Inputs
   const [selectedJSONL, setSelectedJSONL] = useState('')
   const [csvFolderName, setCsvFolderName] = useState('openalex_csv')
-  const [selectedCSVFolderForConversion, setSelectedCSVFolderForConversion] = useState('openalex_csv')
   const [sqliteName, setSqliteName] = useState(
-    activeProject && activeProject !== 'default' ? `${activeProject}.db` : 'papers.db'
+    activeProject && activeProject !== 'default' ? `${activeProject}.db` : 'papers.db',
   )
   const [duckdbName, setDuckdbName] = useState(
-    activeProject && activeProject !== 'default' ? `${activeProject}.duckdb` : 'papers.duckdb'
+    activeProject && activeProject !== 'default' ? `${activeProject}.duckdb` : 'papers.duckdb',
   )
   const [sqlName, setSqlName] = useState(
-    activeProject && activeProject !== 'default' ? `${activeProject}_dump.sql` : 'papers_dump.sql'
+    activeProject && activeProject !== 'default' ? `${activeProject}_dump.sql` : 'papers_dump.sql',
   )
   const [createSQLite, setCreateSQLite] = useState(true)
   const [createDuckDB, setCreateDuckDB] = useState(true)
@@ -183,10 +182,14 @@ export function Export() {
       if (match) return match
     }
     if (filesData.last_status?.sqlite_file) {
-      const match = filesData.sqlite_files?.find((d) => d.name === filesData.last_status?.sqlite_file)
+      const match = filesData.sqlite_files?.find(
+        (d) => d.name === filesData.last_status?.sqlite_file,
+      )
       if (match) return match
     }
-    return filesData.sqlite_files && filesData.sqlite_files.length > 0 ? filesData.sqlite_files[0] : null
+    return filesData.sqlite_files && filesData.sqlite_files.length > 0
+      ? filesData.sqlite_files[0]
+      : null
   })()
 
   const olderSQLiteFiles = latestSQLiteFile
@@ -200,7 +203,9 @@ export function Export() {
       if (match) return match
     }
     if (filesData.last_status?.duckdb_file) {
-      const match = filesData.duckdb_files.find((d) => d.name === filesData.last_status?.duckdb_file)
+      const match = filesData.duckdb_files.find(
+        (d) => d.name === filesData.last_status?.duckdb_file,
+      )
       if (match) return match
     }
     return filesData.duckdb_files.length > 0 ? filesData.duckdb_files[0] : null
@@ -227,7 +232,11 @@ export function Export() {
     ? filesData.sql_files.filter((s) => s.path !== latestSQLFile.path)
     : []
 
-  const totalOlderCount = olderCSVFolders.length + olderSQLiteFiles.length + olderDuckDBFiles.length + olderSQLFiles.length
+  const totalOlderCount =
+    olderCSVFolders.length +
+    olderSQLiteFiles.length +
+    olderDuckDBFiles.length +
+    olderSQLFiles.length
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -268,11 +277,6 @@ export function Export() {
           const collected = data.jsonl_files.find((f) => f.name === 'collected_papers.jsonl')
           const chosen = imputed || collected || data.jsonl_files[0]
           setSelectedJSONL(chosen.name)
-        }
-
-        // Set default CSV folder if present
-        if (data.csv_folders && data.csv_folders.length > 0) {
-          setSelectedCSVFolderForConversion(data.csv_folders[0].name)
         }
       }
     } catch (err) {
@@ -346,12 +350,10 @@ export function Export() {
 
   // Start Export Execution
   const handleStartExport = async () => {
-    const targetFolder = mode === 'csv-to-duckdb' || mode === 'csv-to-sqlite' || mode === 'csv-to-sql' 
-      ? selectedCSVFolderForConversion 
-      : csvFolderName.trim() || 'openalex_csv'
+    const targetFolder = csvFolderName.trim() || 'openalex_csv'
 
     const reqBody = {
-      mode,
+      mode: 'pipeline',
       jsonl_path: selectedJSONL,
       csv_folder: targetFolder,
       sqlite_name: sqliteName.trim() || `${activeProject || 'papers'}.db`,
@@ -432,16 +434,26 @@ export function Export() {
             if (type === 'keywords') {
               text = cfgData.keywords || (cfgData.config && cfgData.config.keywords) || ''
             } else if (type === 'topics') {
-              text = cfgData.topics || (cfgData.config && Array.isArray(cfgData.config.topics) ? cfgData.config.topics.join('\n') : '') || ''
+              text =
+                cfgData.topics ||
+                (cfgData.config && Array.isArray(cfgData.config.topics)
+                  ? cfgData.config.topics.join('\n')
+                  : '') ||
+                ''
             }
           }
         }
 
         if (!text) {
-          text = type === 'keywords' ? '# No keywords configured for this project\n' : '# No topic IDs configured for this project\n'
+          text =
+            type === 'keywords'
+              ? '# No keywords configured for this project\n'
+              : '# No topic IDs configured for this project\n'
         }
 
-        const blob = new Blob([text.endsWith('\n') ? text : text + '\n'], { type: 'text/plain;charset=utf-8;' })
+        const blob = new Blob([text.endsWith('\n') ? text : text + '\n'], {
+          type: 'text/plain;charset=utf-8;',
+        })
         const blobUrl = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = blobUrl
@@ -455,7 +467,11 @@ export function Export() {
         return
       } catch (err) {
         console.error('Failed to download text file:', err)
-        addToast('error', 'Download Failed', `Could not download ${type}.txt: ${err instanceof Error ? err.message : String(err)}`)
+        addToast(
+          'error',
+          'Download Failed',
+          `Could not download ${type}.txt: ${err instanceof Error ? err.message : String(err)}`,
+        )
         return
       }
     }
@@ -496,12 +512,20 @@ export function Export() {
                   : 'bg-zinc-50/95 dark:bg-zinc-900/90 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100'
             }`}
           >
-            {toast.type === 'success' && <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />}
-            {toast.type === 'error' && <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />}
-            {toast.type === 'info' && <Info className="h-4 w-4 text-zinc-600 dark:text-zinc-400 shrink-0 mt-0.5" />}
+            {toast.type === 'success' && (
+              <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            )}
+            {toast.type === 'error' && (
+              <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+            )}
+            {toast.type === 'info' && (
+              <Info className="h-4 w-4 text-zinc-600 dark:text-zinc-400 shrink-0 mt-0.5" />
+            )}
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="font-mono font-bold tracking-tight">{toast.title}</span>
-              <span className="font-sans opacity-90 leading-tight break-words">{toast.message}</span>
+              <span className="font-sans opacity-90 leading-tight break-words">
+                {toast.message}
+              </span>
             </div>
           </div>
         ))}
@@ -520,7 +544,10 @@ export function Export() {
             </span>
           </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans max-w-3xl leading-relaxed">
-            Decompose JSONL publication records into 5 relational CSV files (<code>papers</code>, <code>authors</code>, <code>institutions</code>, <code>countries</code>, <code>contributions</code>), ingest into indexed DuckDB databases, generate SQL schema dumps, and download all artifacts.
+            Decompose JSONL publication records into 5 relational CSV files (<code>papers</code>,{' '}
+            <code>authors</code>, <code>institutions</code>, <code>countries</code>,{' '}
+            <code>contributions</code>), ingest into indexed DuckDB databases, generate SQL schema
+            dumps, and download all artifacts.
           </p>
         </div>
 
@@ -541,7 +568,9 @@ export function Export() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono font-bold border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-850 cursor-pointer transition shadow-sm"
             title="Scan project directory for changes"
           >
-            <RefreshCw className={`h-3 w-3 ${loadingFiles ? 'animate-spin text-emerald-500' : ''}`} />
+            <RefreshCw
+              className={`h-3 w-3 ${loadingFiles ? 'animate-spin text-emerald-500' : ''}`}
+            />
             <span>Refresh Files</span>
           </button>
         </div>
@@ -550,106 +579,28 @@ export function Export() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start w-full">
         {/* LEFT COLUMN: Operation Mode & Execution Configuration (cols: 6) */}
         <div className="lg:col-span-6 flex flex-col gap-6">
-          {/* Mode Selector Tabs */}
+          {/* Mode Indicator Banner */}
           <div className="flex flex-col gap-2">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-              Select Operation Mode
+              Operation Mode
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode('pipeline')}
-                disabled={exportRunning}
-                className={`flex flex-col items-start p-3 rounded border text-left cursor-pointer transition ${
-                  mode === 'pipeline'
-                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Full Pipeline</span>
+            <div className="flex items-center justify-between p-3.5 rounded border border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded bg-emerald-100 dark:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0">
+                  <Sparkles className="h-4 w-4" />
                 </div>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  JSONL → 5 CSVs → SQLite (.db) + DuckDB
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('jsonl-to-csv')}
-                disabled={exportRunning}
-                className={`flex flex-col items-start p-3 rounded border text-left cursor-pointer transition ${
-                  mode === 'jsonl-to-csv'
-                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                  <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>JSONL → CSV</span>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 font-mono text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    <span>Full Pipeline</span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      Standard
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-600 dark:text-zinc-400 font-sans mt-0.5">
+                    End-to-end execution: JSONL → 5 Relational CSVs → SQLite (.db) + DuckDB
+                  </span>
                 </div>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  Decompose into 5 Relational CSVs
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('csv-to-sqlite')}
-                disabled={exportRunning}
-                className={`flex flex-col items-start p-3 rounded border text-left cursor-pointer transition ${
-                  mode === 'csv-to-sqlite'
-                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                  <Database className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>CSV → SQLite (.db)</span>
-                </div>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  Compile for DB Browser / SQL Viewer
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('csv-to-duckdb')}
-                disabled={exportRunning}
-                className={`flex flex-col items-start p-3 rounded border text-left cursor-pointer transition ${
-                  mode === 'csv-to-duckdb'
-                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                  <Database className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>CSV → DuckDB</span>
-                </div>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  Load CSVs into indexed DuckDB
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode('csv-to-sql')}
-                disabled={exportRunning}
-                className={`flex flex-col items-start p-3 rounded border text-left cursor-pointer transition ${
-                  mode === 'csv-to-sql'
-                    ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-950 dark:text-emerald-100 shadow-sm'
-                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-mono text-xs font-bold">
-                  <FileCode className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                  <span>CSV → SQL Dump</span>
-                </div>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  Generate ANSI/DuckDB SQL file
-                </span>
-              </button>
+              </div>
             </div>
           </div>
 
@@ -667,205 +618,167 @@ export function Export() {
               </span>
             </div>
 
-            {/* Input JSONL Selection (for pipeline and jsonl-to-csv) */}
-            {(mode === 'pipeline' || mode === 'jsonl-to-csv') && (
-              <div className="flex flex-col gap-2 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Source JSONL File
+            {/* Input JSONL Selection */}
+            <div className="flex flex-col gap-2 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  Source JSONL File
+                </span>
+                {selectedJSONL && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                    <CheckCircle className="h-2.5 w-2.5" /> Auto-Selected
                   </span>
-                  {selectedJSONL && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-                      <CheckCircle className="h-2.5 w-2.5" /> Auto-Selected
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2 rounded">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                      {selectedJSONL || 'No JSONL files found'}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-mono text-zinc-400 shrink-0">
-                    data/jsonl/
-                  </span>
-                </div>
-
-                {filesData.jsonl_files.length > 1 && (
-                  <div className="flex items-center justify-between pt-1 text-[10px] font-mono text-zinc-400">
-                    <span>Select alternative JSONL:</span>
-                    <select
-                      value={selectedJSONL}
-                      onChange={(e) => setSelectedJSONL(e.target.value)}
-                      disabled={exportRunning}
-                      className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded text-[10px] font-mono text-zinc-700 dark:text-zinc-300 cursor-pointer max-w-[220px] truncate"
-                    >
-                      {filesData.jsonl_files.map((f) => (
-                        <option key={f.name} value={f.name}>
-                          {f.name} ({f.size_human}){f.is_imputed ? ' [Imputed]' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 )}
               </div>
-            )}
 
-            {/* CSV Source Selection (for csv-to-duckdb, csv-to-sqlite, and csv-to-sql) */}
-            {(mode === 'csv-to-duckdb' || mode === 'csv-to-sqlite' || mode === 'csv-to-sql') && (
-              <div className="flex flex-col gap-2 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                  <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                  Source CSV Directory
-                </span>
-                {filesData.csv_folders.length > 0 ? (
+              <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2 rounded">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="font-mono text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                    {selectedJSONL || 'No JSONL files found'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400 shrink-0">data/jsonl/</span>
+              </div>
+
+              {filesData.jsonl_files.length > 1 && (
+                <div className="flex items-center justify-between pt-1 text-[10px] font-mono text-zinc-400">
+                  <span>Select alternative JSONL:</span>
                   <select
-                    value={selectedCSVFolderForConversion}
-                    onChange={(e) => setSelectedCSVFolderForConversion(e.target.value)}
+                    value={selectedJSONL}
+                    onChange={(e) => setSelectedJSONL(e.target.value)}
                     disabled={exportRunning}
-                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3 py-2 rounded text-xs font-mono text-zinc-800 dark:text-zinc-200 cursor-pointer"
+                    className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-0.5 rounded text-[10px] font-mono text-zinc-700 dark:text-zinc-300 cursor-pointer max-w-[220px] truncate"
                   >
-                    {filesData.csv_folders.map((folder) => (
-                      <option key={folder.name} value={folder.name}>
-                        {folder.name} ({folder.files.length} tables, {folder.total_size_human})
+                    {filesData.jsonl_files.map((f) => (
+                      <option key={f.name} value={f.name}>
+                        {f.name} ({f.size_human}){f.is_imputed ? ' [Imputed]' : ''}
                       </option>
                     ))}
                   </select>
-                ) : (
-                  <div className="p-3 rounded border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 text-xs font-mono">
-                    No decomposed CSV folders found in <code>data/csv/</code>. Please run the JSONL → CSV mode first.
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
 
-            {/* Output CSV Directory Name (for pipeline and jsonl-to-csv) */}
-            {(mode === 'pipeline' || mode === 'jsonl-to-csv') && (
-              <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
-                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                  Target CSV Folder Name:
-                </label>
-                <input
-                  type="text"
-                  value={csvFolderName}
-                  onChange={(e) => setCsvFolderName(e.target.value)}
-                  disabled={exportRunning}
-                  placeholder="openalex_csv"
-                  className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400"
-                />
-                <span className="text-[10px] font-mono text-zinc-400">
-                  Will generate: <code>papers.csv</code>, <code>authors.csv</code>, <code>institutions.csv</code>, <code>countries.csv</code>, <code>contributions.csv</code>
-                </span>
-              </div>
-            )}
+            {/* Output CSV Directory Name */}
+            <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
+              <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                Target CSV Folder Name:
+              </label>
+              <input
+                type="text"
+                value={csvFolderName}
+                onChange={(e) => setCsvFolderName(e.target.value)}
+                disabled={exportRunning}
+                placeholder="openalex_csv"
+                className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400"
+              />
+              <span className="text-[10px] font-mono text-zinc-400">
+                Will generate: <code>papers.csv</code>, <code>authors.csv</code>,{' '}
+                <code>institutions.csv</code>, <code>countries.csv</code>,{' '}
+                <code>contributions.csv</code>
+              </span>
+            </div>
 
             {/* SQLite Database Target (.db) */}
-            {(mode === 'pipeline' || mode === 'csv-to-sqlite') && (
-              <div className="flex flex-col gap-1.5 p-3.5 rounded border border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/25 dark:bg-emerald-950/20">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
-                    <Database className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                    <span>Target SQLite Database (.db):</span>
-                  </label>
-                  {mode === 'pipeline' && (
-                    <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none text-emerald-800 dark:text-emerald-300 font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={createSQLite}
-                        onChange={(e) => setCreateSQLite(e.target.checked)}
-                        disabled={exportRunning}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>Generate SQLite (.db)</span>
-                    </label>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={sqliteName}
-                  onChange={(e) => setSqliteName(e.target.value)}
-                  disabled={exportRunning || (mode === 'pipeline' && !createSQLite)}
-                  placeholder={`${activeProject || 'papers'}.db`}
-                  className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-                />
-                <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
-                  Location: <code>data/db/{sqliteName || `${activeProject || 'papers'}.db`}</code> • <strong>Compatible with DB Browser for SQLite, VS Code SQL Viewer, and DBeaver (no password required).</strong>
-                </span>
+            <div className="flex flex-col gap-1.5 p-3.5 rounded border border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/25 dark:bg-emerald-950/20">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                  <Database className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <span>Target SQLite Database (.db):</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none text-emerald-800 dark:text-emerald-300 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={createSQLite}
+                    onChange={(e) => setCreateSQLite(e.target.checked)}
+                    disabled={exportRunning}
+                    className="rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Generate SQLite (.db)</span>
+                </label>
               </div>
-            )}
+              <input
+                type="text"
+                value={sqliteName}
+                onChange={(e) => setSqliteName(e.target.value)}
+                disabled={exportRunning || !createSQLite}
+                placeholder={`${activeProject || 'papers'}.db`}
+                className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+              />
+              <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
+                Location: <code>data/db/{sqliteName || `${activeProject || 'papers'}.db`}</code> •{' '}
+                <strong>
+                  Compatible with DB Browser for SQLite, VS Code SQL Viewer, and DBeaver (no
+                  password required).
+                </strong>
+              </span>
+            </div>
 
             {/* DuckDB Database Target Name */}
-            {(mode === 'pipeline' || mode === 'csv-to-duckdb') && (
-              <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                    <Database className="h-3 w-3 text-amber-600" />
-                    <span>Target DuckDB Database:</span>
-                  </label>
-                  {mode === 'pipeline' && (
-                    <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={createDuckDB}
-                        onChange={(e) => setCreateDuckDB(e.target.checked)}
-                        disabled={exportRunning}
-                        className="rounded"
-                      />
-                      <span>Enable DuckDB</span>
-                    </label>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={duckdbName}
-                  onChange={(e) => setDuckdbName(e.target.value)}
-                  disabled={exportRunning || (mode === 'pipeline' && !createDuckDB)}
-                  placeholder="papers.duckdb"
-                  className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400 disabled:opacity-50"
-                />
-                <span className="text-[10px] font-mono text-zinc-400">
-                  Location: <code>data/db/{duckdbName || 'papers.duckdb'}</code> (includes automated B-Tree indexes)
-                </span>
+            <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <Database className="h-3 w-3 text-amber-600" />
+                  <span>Target DuckDB Database:</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createDuckDB}
+                    onChange={(e) => setCreateDuckDB(e.target.checked)}
+                    disabled={exportRunning}
+                    className="rounded"
+                  />
+                  <span>Enable DuckDB</span>
+                </label>
               </div>
-            )}
+              <input
+                type="text"
+                value={duckdbName}
+                onChange={(e) => setDuckdbName(e.target.value)}
+                disabled={exportRunning || !createDuckDB}
+                placeholder="papers.duckdb"
+                className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400 disabled:opacity-50"
+              />
+              <span className="text-[10px] font-mono text-zinc-400">
+                Location: <code>data/db/{duckdbName || 'papers.duckdb'}</code> (includes automated
+                B-Tree indexes)
+              </span>
+            </div>
 
             {/* SQL Dump Target Name */}
-            {(mode === 'pipeline' || mode === 'csv-to-sql') && (
-              <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                    <FileCode className="h-3 w-3 text-purple-600" />
-                    <span>Target SQL Dump File:</span>
-                  </label>
-                  {mode === 'pipeline' && (
-                    <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={createSQL}
-                        onChange={(e) => setCreateSQL(e.target.checked)}
-                        disabled={exportRunning}
-                        className="rounded"
-                      />
-                      <span>Generate SQL</span>
-                    </label>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={sqlName}
-                  onChange={(e) => setSqlName(e.target.value)}
-                  disabled={exportRunning || (mode === 'pipeline' && !createSQL)}
-                  placeholder="papers_dump.sql"
-                  className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400 disabled:opacity-50"
-                />
-                <span className="text-[10px] font-mono text-zinc-400">
-                  Location: <code>data/sql/{sqlName || 'papers_dump.sql'}</code> (schema + insert statements)
-                </span>
+            <div className="flex flex-col gap-1.5 p-3.5 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <FileCode className="h-3 w-3 text-purple-600" />
+                  <span>Target SQL Dump File:</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-[10px] font-mono cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={createSQL}
+                    onChange={(e) => setCreateSQL(e.target.checked)}
+                    disabled={exportRunning}
+                    className="rounded"
+                  />
+                  <span>Generate SQL</span>
+                </label>
               </div>
-            )}
+              <input
+                type="text"
+                value={sqlName}
+                onChange={(e) => setSqlName(e.target.value)}
+                disabled={exportRunning || !createSQL}
+                placeholder="papers_dump.sql"
+                className="font-mono text-xs px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-400 disabled:opacity-50"
+              />
+              <span className="text-[10px] font-mono text-zinc-400">
+                Location: <code>data/sql/{sqlName || 'papers_dump.sql'}</code> (schema + insert
+                statements)
+              </span>
+            </div>
 
             {/* Primary Action Button */}
             <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3 flex gap-2">
@@ -882,11 +795,11 @@ export function Export() {
                 <button
                   type="button"
                   onClick={handleStartExport}
-                  disabled={exportRunning || ((mode === 'pipeline' || mode === 'jsonl-to-csv') && !selectedJSONL)}
+                  disabled={exportRunning || !selectedJSONL}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-xs font-bold uppercase bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 border-zinc-800 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 cursor-pointer transition select-none shadow-sm"
                 >
                   <Play className="h-3.5 w-3.5 fill-current" />
-                  <span>Run Export ({mode})</span>
+                  <span>Run Full Pipeline</span>
                 </button>
               )}
             </div>
@@ -1002,10 +915,14 @@ export function Export() {
                   >
                     <div className="flex items-center gap-2 truncate">
                       <Database className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500 transition shrink-0" />
-                      <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">{latestSQLiteFile.name}</span>
+                      <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">
+                        {latestSQLiteFile.name}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-1">
-                      <span className="text-[10px] text-zinc-400">{latestSQLiteFile.size_human}</span>
+                      <span className="text-[10px] text-zinc-400">
+                        {latestSQLiteFile.size_human}
+                      </span>
                       <Download className="h-3 w-3 text-zinc-400 group-hover:text-emerald-500 transition" />
                     </div>
                   </button>
@@ -1032,10 +949,14 @@ export function Export() {
                     >
                       <div className="flex items-center gap-2 truncate">
                         <HardDrive className="h-3.5 w-3.5 text-amber-500 group-hover:text-amber-600 transition shrink-0" />
-                        <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">{latestDuckDBFile.name}</span>
+                        <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">
+                          {latestDuckDBFile.name}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0 ml-1">
-                        <span className="text-[10px] text-zinc-400">{latestDuckDBFile.size_human}</span>
+                        <span className="text-[10px] text-zinc-400">
+                          {latestDuckDBFile.size_human}
+                        </span>
                         <Download className="h-3 w-3 text-zinc-400 group-hover:text-amber-600 transition" />
                       </div>
                     </button>
@@ -1072,7 +993,9 @@ export function Export() {
                   >
                     <div className="flex items-center gap-2 truncate">
                       <FileCode className="h-3.5 w-3.5 text-purple-500 group-hover:text-purple-600 transition shrink-0" />
-                      <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">{latestSQLFile.name}</span>
+                      <span className="truncate font-bold text-zinc-800 dark:text-zinc-200">
+                        {latestSQLFile.name}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       <span className="text-[10px] text-zinc-400">{latestSQLFile.size_human}</span>
@@ -1153,22 +1076,37 @@ export function Export() {
                   className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-900 text-[10px] font-mono text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer transition"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span>{showOlderArchives ? 'Hide previously converted items' : `Show previously converted items (${totalOlderCount} older item${totalOlderCount > 1 ? 's' : ''})`}</span>
+                    <span>
+                      {showOlderArchives
+                        ? 'Hide previously converted items'
+                        : `Show previously converted items (${totalOlderCount} older item${totalOlderCount > 1 ? 's' : ''})`}
+                    </span>
                   </span>
-                  {showOlderArchives ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showOlderArchives ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
                 </button>
 
                 {showOlderArchives && (
                   <div className="flex flex-col gap-3 p-3 rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-xs font-mono">
                     {olderCSVFolders.length > 0 && (
                       <div className="flex flex-col gap-2">
-                        <span className="text-[10px] uppercase font-bold text-zinc-500">Older CSV Folders:</span>
+                        <span className="text-[10px] uppercase font-bold text-zinc-500">
+                          Older CSV Folders:
+                        </span>
                         {olderCSVFolders.map((folder) => (
-                          <div key={folder.name} className="flex items-center justify-between p-2 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+                          <div
+                            key={folder.name}
+                            className="flex items-center justify-between p-2 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800"
+                          >
                             <div className="flex items-center gap-2 truncate">
                               <FolderArchive className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                               <span className="font-bold truncate">{folder.name}</span>
-                              <span className="text-zinc-400 text-[10px] shrink-0">({folder.total_size_human}, {folder.mod_time})</span>
+                              <span className="text-zinc-400 text-[10px] shrink-0">
+                                ({folder.total_size_human}, {folder.mod_time})
+                              </span>
                             </div>
                             <button
                               type="button"
@@ -1184,7 +1122,9 @@ export function Export() {
 
                     {olderSQLiteFiles.length > 0 && (
                       <div className="flex flex-col gap-2">
-                        <span className="text-[10px] uppercase font-bold text-zinc-500">Older SQLite Databases (.db):</span>
+                        <span className="text-[10px] uppercase font-bold text-zinc-500">
+                          Older SQLite Databases (.db):
+                        </span>
                         {olderSQLiteFiles.map((db) => (
                           <button
                             key={db.path}
@@ -1193,7 +1133,9 @@ export function Export() {
                             className="flex items-center justify-between p-2 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-850 text-left cursor-pointer"
                           >
                             <span className="truncate">{db.name}</span>
-                            <span className="text-zinc-400 text-[10px] shrink-0 ml-2">{db.size_human} ({db.mod_time})</span>
+                            <span className="text-zinc-400 text-[10px] shrink-0 ml-2">
+                              {db.size_human} ({db.mod_time})
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -1201,7 +1143,9 @@ export function Export() {
 
                     {olderDuckDBFiles.length > 0 && (
                       <div className="flex flex-col gap-2">
-                        <span className="text-[10px] uppercase font-bold text-zinc-500">Older DuckDB Databases:</span>
+                        <span className="text-[10px] uppercase font-bold text-zinc-500">
+                          Older DuckDB Databases:
+                        </span>
                         {olderDuckDBFiles.map((db) => (
                           <div
                             key={db.path}
@@ -1210,7 +1154,9 @@ export function Export() {
                             <div className="flex items-center gap-2 truncate min-w-0">
                               <Database className="h-3 w-3 text-amber-500 shrink-0" />
                               <span className="truncate font-medium">{db.name}</span>
-                              <span className="text-zinc-400 text-[10px] shrink-0 ml-1">({db.size_human}, {db.mod_time})</span>
+                              <span className="text-zinc-400 text-[10px] shrink-0 ml-1">
+                                ({db.size_human}, {db.mod_time})
+                              </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
                               <Link
@@ -1237,7 +1183,9 @@ export function Export() {
 
                     {olderSQLFiles.length > 0 && (
                       <div className="flex flex-col gap-2">
-                        <span className="text-[10px] uppercase font-bold text-zinc-500">Older SQL Dumps:</span>
+                        <span className="text-[10px] uppercase font-bold text-zinc-500">
+                          Older SQL Dumps:
+                        </span>
                         {olderSQLFiles.map((sql) => (
                           <button
                             key={sql.path}
@@ -1246,7 +1194,9 @@ export function Export() {
                             className="flex items-center justify-between p-2 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-850 text-left cursor-pointer"
                           >
                             <span className="truncate">{sql.name}</span>
-                            <span className="text-zinc-400 text-[10px] shrink-0 ml-2">{sql.size_human} ({sql.mod_time})</span>
+                            <span className="text-zinc-400 text-[10px] shrink-0 ml-2">
+                              {sql.size_human} ({sql.mod_time})
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -1271,13 +1221,17 @@ export function Export() {
               <div className="p-2 rounded border border-zinc-200/70 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/20">
                 <span className="font-bold text-zinc-800 dark:text-zinc-200">papers.csv</span>
                 <p className="text-[10px] text-zinc-400 font-sans mt-0.5">
-                  29 fields: DOI, title, abstract, dates, journal, OA metrics, FWCI, citation counts.
+                  29 fields: DOI, title, abstract, dates, journal, OA metrics, FWCI, citation
+                  counts.
                 </p>
               </div>
               <div className="p-2 rounded border border-zinc-200/70 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/20">
-                <span className="font-bold text-zinc-800 dark:text-zinc-200">contributions.csv</span>
+                <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                  contributions.csv
+                </span>
                 <p className="text-[10px] text-zinc-400 font-sans mt-0.5">
-                  Foreign key junction table linking paper_id, author_id, institution_id, country_code.
+                  Foreign key junction table linking paper_id, author_id, institution_id,
+                  country_code.
                 </p>
               </div>
               <div className="p-2 rounded border border-zinc-200/70 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/20">
@@ -1287,9 +1241,12 @@ export function Export() {
                 </p>
               </div>
               <div className="p-2 rounded border border-zinc-200/70 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/20">
-                <span className="font-bold text-zinc-800 dark:text-zinc-200">institutions.csv & countries.csv</span>
+                <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                  institutions.csv & countries.csv
+                </span>
                 <p className="text-[10px] text-zinc-400 font-sans mt-0.5">
-                  Normalized institutions (ROR IDs, synthetic flags) and standardized ISO country entities.
+                  Normalized institutions (ROR IDs, synthetic flags) and standardized ISO country
+                  entities.
                 </p>
               </div>
             </div>
@@ -1305,7 +1262,8 @@ export function Export() {
                 Export Diagnostics & Progress Console
               </h3>
               <p className="text-[11px] text-zinc-400 font-sans">
-                Real-time terminal stream, decomposition row counts, and indexing telemetry from <code>json_to_csv.py</code>.
+                Real-time terminal stream, decomposition row counts, and indexing telemetry from{' '}
+                <code>json_to_csv.py</code>.
               </p>
             </div>
 
@@ -1339,7 +1297,11 @@ export function Export() {
                   onClick={handleCopyLogs}
                   className="flex items-center gap-1 px-2.5 py-1 rounded font-mono text-[10px] font-bold uppercase border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer transition"
                 >
-                  {copiedLogs ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                  {copiedLogs ? (
+                    <Check className="h-3 w-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
                   <span>{copiedLogs ? 'Copied' : 'Copy'}</span>
                 </button>
               )}
@@ -1382,7 +1344,10 @@ export function Export() {
               <span className="font-bold">Generated Artifacts:</span>
               <div className="flex flex-wrap gap-1.5 items-center">
                 {exportOutputFiles.map((file) => (
-                  <span key={file} className="px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 text-[10px]">
+                  <span
+                    key={file}
+                    className="px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 text-[10px]"
+                  >
                     {file}
                   </span>
                 ))}
@@ -1413,7 +1378,8 @@ export function Export() {
           <div className="w-full h-80 bg-zinc-950 text-zinc-300 font-mono text-[11px] p-4 rounded border border-zinc-800 overflow-y-auto shadow-inner flex flex-col gap-1 select-text">
             {exportLogs.length === 0 ? (
               <div className="h-full flex items-center justify-center text-zinc-600 italic select-none">
-                Ready to execute. Select mode and click "Run Export" to monitor live decomposition and database creation.
+                Ready to execute. Click "Run Full Pipeline" to monitor live decomposition and
+                database creation.
               </div>
             ) : (
               exportLogs.map((log, idx) => {

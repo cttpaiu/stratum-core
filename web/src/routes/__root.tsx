@@ -1,7 +1,19 @@
 // src/routes/__root.tsx
 import { useState, useEffect } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
-import { LayoutDashboard, Settings, Database, BookOpen, Sun, Moon, Cpu, Trash2, AlertTriangle, Download, CheckCircle2 } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Settings,
+  Database,
+  BookOpen,
+  Sun,
+  Moon,
+  Trash2,
+  AlertTriangle,
+  Download,
+  CheckCircle2,
+  TrendingUp,
+} from 'lucide-react'
 import { ProjectContext } from '../context/ProjectContext'
 
 export function Root() {
@@ -48,7 +60,6 @@ export function Root() {
       console.error('Failed to load projects list:', err)
     }
   }
-
 
   useEffect(() => {
     let isMounted = true
@@ -154,8 +165,6 @@ export function Root() {
     }
   }
 
-
-
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark')
@@ -188,7 +197,10 @@ export function Root() {
             <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400">
               Workspace Folder
             </span>
-            <div className="text-[10px] font-mono truncate text-zinc-600 dark:text-zinc-400" title={workspaceDir || 'Default'}>
+            <div
+              className="text-[10px] font-mono truncate text-zinc-600 dark:text-zinc-400"
+              title={workspaceDir || 'Default'}
+            >
               {workspaceDir || './'}
             </div>
           </div>
@@ -316,7 +328,7 @@ export function Root() {
             </Link>
 
             <Link
-              to="/wos"
+              to="/insights"
               activeProps={{
                 className:
                   'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold',
@@ -327,8 +339,8 @@ export function Root() {
               }}
               className="flex items-center gap-3 px-3 py-2.5 rounded text-xs font-mono uppercase tracking-wider transition-all"
             >
-              <Cpu className="h-4 w-4" />
-              <span>WoS & Imputation</span>
+              <TrendingUp className="h-4 w-4" />
+              <span>Insights</span>
             </Link>
 
             <Link
@@ -484,7 +496,8 @@ export function Root() {
                   ?
                 </p>
                 <p className="text-[11px] font-sans text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  This action will permanently delete all associated database files, JSONL outputs, uploaded files, and configuration for this project. This action cannot be undone.
+                  This action will permanently delete all associated database files, JSONL outputs,
+                  uploaded files, and configuration for this project. This action cannot be undone.
                 </p>
 
                 {deleteError && (
