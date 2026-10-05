@@ -565,14 +565,20 @@ type OllamaClient struct {
 
 // Complete submits a prompt payload to the Ollama endpoint.
 func (c *OllamaClient) Complete(ctx context.Context, prompt string) (string, error) {
-	urlStr := c.BaseURL + "/api/generate"
+	urlStr := strings.TrimRight(strings.TrimSpace(c.BaseURL), "/") + "/api/generate"
+	modelName := strings.ReplaceAll(strings.TrimSpace(c.Model), " ", "")
+	if modelName == "" {
+		modelName = "qwen3:4b"
+	}
 
 	payload := map[string]interface{}{
-		"model":  c.Model,
+		"model":  modelName,
 		"prompt": prompt,
 		"stream": false,
 		"options": map[string]interface{}{
 			"temperature": 0.0,
+			"num_predict": 4096,
+			"num_ctx":     8192,
 		},
 		"format": "json",
 	}
@@ -600,12 +606,18 @@ func (c *OllamaClient) Complete(ctx context.Context, prompt string) (string, err
 
 	var res struct {
 		Response string `json:"response"`
+		Thinking string `json:"thinking"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return "", err
 	}
 
-	return res.Response, nil
+	resultText := strings.TrimSpace(res.Response)
+	if resultText == "" {
+		resultText = strings.TrimSpace(res.Thinking)
+	}
+
+	return resultText, nil
 }
 
 // GeminiClient wraps the google.golang.org/genai client.
@@ -617,24 +629,83 @@ type GeminiClient struct {
 // Complete submits a prompt payload to the Gemini API.
 func (c *GeminiClient) Complete(ctx context.Context, prompt string) (string, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: c.APIKey,
+		APIKey:  c.APIKey,
+		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	result, err := client.Models.GenerateContent(ctx, c.Model, []*genai.Content{{
-		Parts: []*genai.Part{{Text: prompt}},
-	}}, nil)
-	if err != nil {
-		return "", err
+	modelName := strings.TrimSpace(c.Model)
+	if modelName == "" || strings.Contains(modelName, ":") || !strings.HasPrefix(strings.ToLower(modelName), "gemini") {
+		modelName = "gemini-3.6-flash"
 	}
 
-	if len(result.Candidates) == 0 || result.Candidates[0].Content == nil || len(result.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("gemini returned no content candidates")
+	modelsToTry := []string{modelName}
+	for _, m := range []string{"gemini-3.6-flash", "gemini-3.6-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-pro", "gemini-1.5-pro"} {
+		if !strings.EqualFold(m, modelName) {
+			modelsToTry = append(modelsToTry, m)
+		}
 	}
 
-	return result.Candidates[0].Content.Parts[0].Text, nil
+	var lastErr error
+	tried := make(map[string]bool)
+
+	for i := 0; i < len(modelsToTry); i++ {
+		m := modelsToTry[i]
+		if tried[m] {
+			continue
+		}
+		tried[m] = true
+
+		result, err := client.Models.GenerateContent(ctx, m, []*genai.Content{{
+			Parts: []*genai.Part{{Text: prompt}},
+		}}, nil)
+		if err != nil {
+			lastErr = err
+			errStr := err.Error()
+
+			// If Google API suggested a replacement model in the error message, queue it
+			reSuggested := regexp.MustCompile(`models/([a-zA-Z0-9.-]+)`)
+			if matches := reSuggested.FindAllStringSubmatch(errStr, -1); len(matches) > 0 {
+				for _, match := range matches {
+					if len(match) > 1 {
+						suggestedModel := match[1]
+						if !tried[suggestedModel] && !strings.EqualFold(suggestedModel, m) {
+							modelsToTry = append(modelsToTry[:i+1], append([]string{suggestedModel}, modelsToTry[i+1:]...)...)
+						}
+					}
+				}
+			}
+
+			if strings.Contains(errStr, "404") ||
+				strings.Contains(errStr, "not found") ||
+				strings.Contains(errStr, "NOT_FOUND") ||
+				strings.Contains(errStr, "no longer available") ||
+				strings.Contains(errStr, "503") ||
+				strings.Contains(errStr, "UNAVAILABLE") ||
+				strings.Contains(errStr, "high demand") ||
+				strings.Contains(errStr, "429") ||
+				strings.Contains(errStr, "RESOURCE_EXHAUSTED") ||
+				strings.Contains(errStr, "quota") ||
+				strings.Contains(errStr, "500") ||
+				strings.Contains(errStr, "INTERNAL") {
+				// Brief backoff before switching model
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return "", err
+		}
+
+		if len(result.Candidates) > 0 && result.Candidates[0].Content != nil && len(result.Candidates[0].Content.Parts) > 0 {
+			return result.Candidates[0].Content.Parts[0].Text, nil
+		}
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", fmt.Errorf("gemini returned no content candidates")
 }
 
 func parseJSONMarkdown(s string) string {

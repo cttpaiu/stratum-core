@@ -424,4 +424,121 @@ func TestFetchSample(t *testing.T) {
 	}
 }
 
+func TestDownloadPapersWithOptions_Deduplication(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "stratum_download_dedup_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Mock server that returns same W1 paper for all batches
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cursor := r.URL.Query().Get("cursor")
+		w.Header().Set("Content-Type", "application/json")
+		if cursor == "*" {
+			fmt.Fprintln(w, `{"meta":{"count":1,"next_cursor":"cursor_end"},"results":[{"id":"W1","title":"Paper 1"}]}`)
+		} else {
+			fmt.Fprintln(w, `{"meta":{"count":1,"next_cursor":""},"results":[]}`)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(nil, "test@example.com", 2, 2, 2, 1)
+	client.baseURL = server.URL
+
+	cfg := &config.AppConfig{
+		Keywords: "quantum",
+		Topics:   []string{"T10001", "T10002"},
+		Collection: config.CollectionConfig{
+			BatchSizeTopics:    1,
+			PerPage:            2,
+			ConcurrentRequests: 2,
+			MaxRetries:         2,
+			RetryDelay:         1,
+		},
+		Filters: config.FiltersConfig{
+			DateFrom: "2020-01-01",
+			DateTo:   "2023-12-31",
+		},
+	}
+
+	outputJSONL := filepath.Join(tmpDir, "output_dedup.jsonl")
+	progressChan := make(chan int, 100)
+	logChan := make(chan string, 100)
+
+	stats, err := client.DownloadPapersWithOptions(context.Background(), cfg, outputJSONL, DownloadOptions{
+		Deduplicate: true,
+	}, progressChan, logChan)
+	if err != nil {
+		t.Fatalf("DownloadPapersWithOptions failed: %v", err)
+	}
+
+	if stats.Collected != 1 {
+		t.Errorf("expected 1 collected paper due to deduplication, got %d", stats.Collected)
+	}
+	if stats.DuplicatesSkipped != 1 {
+		t.Errorf("expected 1 duplicate skipped, got %d", stats.DuplicatesSkipped)
+	}
+
+	// Check output file has exactly 1 line
+	data, err := os.ReadFile(outputJSONL)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line in output JSONL, got %d", len(lines))
+	}
+}
+
+func TestDownloadPapersWithOptions_NoTopics(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "stratum_download_notopics_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	var receivedFilter string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		cursor := r.URL.Query().Get("cursor")
+		if cursor == "*" {
+			fmt.Fprintln(w, `{"meta":{"count":1,"next_cursor":"end"},"results":[{"id":"W_NT","title":"No Topics Paper"}]}`)
+		} else {
+			fmt.Fprintln(w, `{"meta":{"count":1,"next_cursor":""},"results":[]}`)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(nil, "test@example.com", 2, 2, 2, 1)
+	client.baseURL = server.URL
+
+	cfg := &config.AppConfig{
+		Keywords: "quantum",
+		Topics:   []string{"T10001", "T10002"},
+		Filters: config.FiltersConfig{
+			DateFrom: "2020-01-01",
+			DateTo:   "2023-12-31",
+		},
+	}
+
+	outputJSONL := filepath.Join(tmpDir, "output_notopics.jsonl")
+	stats, err := client.DownloadPapersWithOptions(context.Background(), cfg, outputJSONL, DownloadOptions{
+		NoTopics:    true,
+		Deduplicate: true,
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("DownloadPapersWithOptions with NoTopics failed: %v", err)
+	}
+
+	if stats.Collected != 1 {
+		t.Errorf("expected 1 collected paper, got %d", stats.Collected)
+	}
+	if strings.Contains(receivedFilter, "primary_topic.id") {
+		t.Errorf("expected filter to NOT contain topic IDs when NoTopics=true, got: %s", receivedFilter)
+	}
+}
+
+
 

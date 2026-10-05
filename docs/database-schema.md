@@ -166,3 +166,33 @@ Maps authors and their institutions to papers, detailing position and raw affili
 | `author_position` | `VARCHAR` | Position list (e.g. `first`, `middle`, `last`). |
 | `is_corresponding`| `BOOLEAN` | Indicates if the author is the corresponding author. |
 | `raw_affiliation_string` | `VARCHAR` | Original, unparsed affiliation text from the publisher's manuscript. |
+
+---
+
+## 6. Direct JSONL Querying & Ingestion
+
+DuckDB supports querying OpenAlex JSONL files directly without requiring prior database insertion, as well as normalizing records into the relational schema above.
+
+### Direct JSONL Queries via `read_json_auto`
+You can query downloaded JSONL files immediately using DuckDB's auto-detecting JSON reader:
+
+```sql
+-- Query works directly from downloaded JSONL files
+SELECT id, title, publication_year, cited_by_count
+FROM read_json_auto('data/jsonl/*.jsonl')
+WHERE publication_year >= 2022
+ORDER BY cited_by_count DESC
+LIMIT 10;
+```
+
+### Ingesting JSONL into Relational Tables
+To normalize and load records from a `.jsonl` file into `papers`, `authors`, `institutions`, `countries`, and `contributions`:
+
+```bash
+# Via REST API
+curl -X POST "http://localhost:8080/api/db/import-jsonl?project=6G" \
+     -H "Content-Type: application/json" \
+     -d '{"filename": "6G.jsonl"}'
+```
+
+Or click **"Import JSONL into DuckDB"** directly inside the SQL Explorer UI.
